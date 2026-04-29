@@ -12,11 +12,17 @@ class ApiService {
   factory ApiService() => _instance;
   ApiService._internal();
 
+  // true - работаем с боевым сервером в офисе, false - с локальным эмулятором дома
+  static const bool isProduction = true; 
+  
+  static const String prodUrl = 'https://api.aravan.kg';
+  static const String devUrl  = 'http://10.0.2.2:3002';
+
   final _storage = const FlutterSecureStorage();
 
   late final Dio _dio = Dio(BaseOptions(
-    baseUrl: _baseUrl,
-    connectTimeout: const Duration(seconds: 10),
+    baseUrl: isProduction ? prodUrl : devUrl,
+    connectTimeout: const Duration(seconds: 15),
     receiveTimeout: const Duration(seconds: 15),
     headers: {'Content-Type': 'application/json'},
   ))
