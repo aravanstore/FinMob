@@ -1,0 +1,18 @@
+{
+  "login": {
+    "title": "Личный кабинет заёмщика",
+    "org_code": "Код организации",
+    "org_code_hint": "напр. aravan_1",
+    "phone": "Номер телефона",
+    "pin": "PIN-код",
+    "button": "Войти",
+    "error_fill": "Заполните все поля",
+    "error_pin": "PIN — минимум 4 цифры"
+  },
+  "staff": {
+    "dashboard": "Рабочее место",
+    "search": "Поиск",
+    "approvals": "Одобрения",
+    "overdue": "Просрочка"
+  }
+}
