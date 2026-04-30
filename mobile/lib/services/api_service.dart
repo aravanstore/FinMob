@@ -118,6 +118,23 @@ class ApiService {
     return response.data as Map<String, dynamic>;
   }
 
+  // ─── STAFF ────────────────────────────────────────────────────────────────
+
+  Future<List<dynamic>> searchClients(String query) async {
+    final response = await _dio.get('/api/staff/clients', queryParameters: {'search': query});
+    return response.data as List<dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getClientDetails(String clientId) async {
+    final response = await _dio.get('/api/staff/clients/$clientId');
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<List<dynamic>> getOverdueLoans() async {
+    final response = await _dio.get('/api/staff/overdue');
+    return response.data as List<dynamic>;
+  }
+
   // ─── HEALTH ───────────────────────────────────────────────────────────────
 
   Future<bool> checkHealth() async {

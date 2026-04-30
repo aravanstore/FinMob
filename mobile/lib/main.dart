@@ -11,6 +11,7 @@ import 'screens/schedule_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/shares_history_screen.dart';
 import 'screens/staff/staff_dashboard_screen.dart';
+import 'screens/staff/client_details_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,6 +50,12 @@ class FinCoreApp extends StatelessWidget {
             path: '/dashboard', builder: (_, __) => const DashboardScreen()),
         GoRoute(
             path: '/staff', builder: (_, __) => const StaffDashboardScreen()),
+        GoRoute(
+          path: '/staff/client/:clientId',
+          builder: (_, state) => ClientDetailsScreen(
+            clientId: state.pathParameters['clientId']!,
+          ),
+        ),
         GoRoute(path: '/payments', builder: (_, __) => const PaymentsScreen()),
         GoRoute(
           path: '/schedule/:loanId',
