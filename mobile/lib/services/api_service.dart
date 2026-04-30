@@ -3,9 +3,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// FinCore Mobile API base URL
 /// В продакшне замените на ваш Cloudflare Tunnel домен
-const _baseUrl = 'http://10.0.2.2:3002';
+const _baseUrl = 'http://10.0.2.2:3001';
 // Для реального телефона используйте IP вашего ПК:
-// const _baseUrl = 'http://192.168.1.XXX:3002';
+// const _baseUrl = 'http://192.168.1.XXX:3001';
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
@@ -16,7 +16,7 @@ class ApiService {
   static const bool isProduction = true; 
   
   static const String prodUrl = 'https://api.aravan.kg';
-  static const String devUrl  = 'http://10.0.2.2:3002';
+  static const String devUrl  = 'http://10.0.2.2:3001';
 
   final _storage = const FlutterSecureStorage();
 
