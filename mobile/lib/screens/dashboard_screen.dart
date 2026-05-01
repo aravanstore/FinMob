@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
 import '../models/loan.dart';
@@ -49,8 +50,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Мои кредиты',
-                style: TextStyle(
+            Text('client.my_loans'.tr(),
+                style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 20)),
@@ -59,6 +60,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
         actions: [
+          PopupMenuButton<Locale>(
+            icon: const Icon(Icons.language, color: Colors.white54),
+            onSelected: (locale) {
+              EasyLocalization.of(context)!.setLocale(locale);
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: Locale('ru'), child: Text('Русский')),
+              const PopupMenuItem(value: Locale('ky'), child: Text('Кыргызча')),
+              const PopupMenuItem(value: Locale('en'), child: Text('English')),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white54),
             onPressed: () async {
@@ -84,16 +96,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const Icon(Icons.wifi_off_rounded,
                       color: Colors.white30, size: 64),
                   const SizedBox(height: 16),
-                  const Text('Нет соединения с сервером',
-                      style: TextStyle(color: Colors.white54)),
+                  Text('client.no_connection'.tr(),
+                      style: const TextStyle(color: Colors.white54)),
                   const SizedBox(height: 12),
                   TextButton(
-                    onPressed: () => setState(() {
-                      _loansFuture = _loadLoans();
-                      _sharesFuture = _api.getSharesSummary();
-                    }),
-                    child: const Text('Повторить'),
-                  ),
+                      onPressed: () => setState(() {
+                            _loansFuture = _loadLoans();
+                            _sharesFuture = _api.getSharesSummary();
+                          }),
+                      child: Text('client.retry'.tr())),
                 ],
               ),
             );
@@ -128,20 +139,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   },
                 ),
                 const SizedBox(height: 20),
-                const Text('Мои кредиты',
-                    style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 16,
+                Text('client.active_loans'.tr(),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
                 if (loans.isEmpty)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 40),
-                      child: Text('Кредитов не найдено',
-                          style: TextStyle(color: Colors.white38)),
-                    ),
-                  )
+                  Center(
+                      child: Text('client.no_loans'.tr(),
+                          style: const TextStyle(color: Colors.white38)))
                 else
                   ...loans.map((l) => _LoanCard(loan: l, fmt: fmt)).toList(),
               ],

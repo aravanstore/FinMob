@@ -1,0 +1,53 @@
+{
+  "login": {
+    "title": "Borrower Dashboard",
+    "org_code": "Organization Code",
+    "org_code_hint": "e.g. boy",
+    "phone": "Phone Number",
+    "pin": "PIN-code",
+    "button": "Login",
+    "error_fill": "Please fill all fields",
+    "error_pin": "PIN — at least 4 digits"
+  },
+  "staff": {
+    "dashboard": "Staff Dashboard",
+    "home": "Home",
+    "clients": "Clients",
+    "approvals": "Approvals",
+    "overdue": "Overdue",
+    "welcome": "Welcome!",
+    "question": "What would you like to do today?",
+    "accounts": "Account Status",
+    "actions": "Quick Actions",
+    "search_hint": "Search clients...",
+    "no_approvals": "No pending approvals",
+    "no_overdue": "No overdue loans"
+  },
+  "client": {
+    "my_loans": "My Loans",
+    "shares": "Shares",
+    "shares_total": "Total Shares",
+    "no_loans": "You have no loans yet",
+    "no_connection": "No server connection",
+    "retry": "Retry",
+    "active_loans": "Active Loans",
+    "loan_id": "Loan №",
+    "debt": "Balance",
+    "next_pay": "Next Payment",
+    "history": "History",
+    "schedule": "Schedule",
+    "history_title": "Transaction History",
+    "no_history": "No transactions",
+    "error_loading": "Loading error",
+    "operation": "Operation",
+    "currency": "KGS",
+    "schedule_title": "Payment Schedule",
+    "date": "Date",
+    "payment": "Payment",
+    "principal": "Principal",
+    "interest": "Interest",
+    "paid": "Paid",
+    "total": "Total",
+    "shares_history": "Shares History"
+  }
+}

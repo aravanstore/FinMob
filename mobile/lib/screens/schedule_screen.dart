@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/api_service.dart';
 import '../models/payment.dart';
 
@@ -39,7 +40,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           onPressed: () => context.go('/dashboard'),
         ),
         title: Text(
-          'График платежей #${widget.loanId}',
+          '${'client.schedule_title'.tr()} #${widget.loanId}',
           style: const TextStyle(color: Colors.white, fontSize: 18),
         ),
       ),
@@ -91,23 +92,23 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            DateFormat('dd MMMM yyyy', 'ru').format(p.paymentDate),
+                            DateFormat('dd MMMM yyyy', context.locale.languageCode).format(p.paymentDate),
                             style: const TextStyle(color: Colors.white, fontSize: 14),
                           ),
                           if (p.isPaid)
-                            const Text('Оплачено',
-                              style: TextStyle(color: Colors.green, fontSize: 12))
+                            Text('client.paid'.tr(),
+                              style: const TextStyle(color: Colors.green, fontSize: 12))
                           else if (p.isOverdue)
-                            Text('Просрочено на ${fmt.format(p.totalAmount)} сом',
+                            Text('staff.overdue'.tr(),
                               style: const TextStyle(color: Colors.redAccent, fontSize: 12))
                           else
-                            Text('К оплате ${fmt.format(p.totalAmount)} сом',
+                            Text('client.payment'.tr(),
                               style: const TextStyle(color: Colors.white38, fontSize: 12)),
                         ],
                       ),
                     ),
                     Text(
-                      '${fmt.format(p.totalAmount)} сом',
+                      '${fmt.format(p.totalAmount)} ${'client.currency'.tr()}',
                       style: TextStyle(
                         color: color, fontSize: 15, fontWeight: FontWeight.bold),
                     ),

@@ -13,10 +13,10 @@ class ApiService {
   ApiService._internal();
 
   // true - работаем с боевым сервером в офисе, false - с локальным эмулятором дома
-  static const bool isProduction = true; 
-  
+  static const bool isProduction = false;
+
   static const String prodUrl = 'https://api.aravan.kg';
-  static const String devUrl  = 'http://10.0.2.2:3002';
+  static const String devUrl = 'http://10.0.2.2:3002';
 
   final _storage = const FlutterSecureStorage();
 
@@ -50,8 +50,8 @@ class ApiService {
   ) async {
     final response = await _dio.post('/api/auth/login', data: {
       'pg_database': pgDatabase,
-      'phone':       phone,
-      'pin':         pin,
+      'phone': phone,
+      'pin': pin,
     });
     return response.data as Map<String, dynamic>;
   }
@@ -63,8 +63,8 @@ class ApiService {
   ) async {
     final response = await _dio.post('/api/auth/staff-login', data: {
       'pg_database': pgDatabase,
-      'username':    username,
-      'password':    password,
+      'username': username,
+      'password': password,
     });
     return response.data as Map<String, dynamic>;
   }
@@ -121,7 +121,8 @@ class ApiService {
   // ─── STAFF ────────────────────────────────────────────────────────────────
 
   Future<List<dynamic>> searchClients(String query) async {
-    final response = await _dio.get('/api/staff/clients', queryParameters: {'search': query});
+    final response = await _dio
+        .get('/api/staff/clients', queryParameters: {'search': query});
     return response.data as List<dynamic>;
   }
 
@@ -133,6 +134,16 @@ class ApiService {
   Future<List<dynamic>> getOverdueLoans() async {
     final response = await _dio.get('/api/staff/overdue');
     return response.data as List<dynamic>;
+  }
+
+  Future<List<dynamic>> getApprovals() async {
+    final response = await _dio.get('/api/staff/approvals');
+    return response.data as List<dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getDashboardStats() async {
+    final response = await _dio.get('/api/staff/dashboard-stats');
+    return response.data as Map<String, dynamic>;
   }
 
   // ─── HEALTH ───────────────────────────────────────────────────────────────

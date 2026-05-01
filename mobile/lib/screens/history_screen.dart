@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/api_service.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -39,9 +40,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
           onPressed: () => context.go('/dashboard'),
         ),
-        title: const Text(
-          'История операций',
-          style: TextStyle(color: Colors.white, fontSize: 18),
+        title: Text(
+          'client.history_title'.tr(),
+          style: const TextStyle(color: Colors.white, fontSize: 18),
         ),
       ),
       body: FutureBuilder<List<dynamic>>(
@@ -52,14 +53,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
               child: CircularProgressIndicator(color: Color(0xFF1A56DB)));
           }
           if (snap.hasError) {
-            return const Center(
-              child: Text('Ошибка загрузки', style: TextStyle(color: Colors.white54)));
+            return Center(
+              child: Text('client.error_loading'.tr(), style: const TextStyle(color: Colors.white54)));
           }
 
           final transactions = snap.data!;
           if (transactions.isEmpty) {
-            return const Center(
-              child: Text('Нет операций', style: TextStyle(color: Colors.white38)));
+            return Center(
+              child: Text('client.no_history'.tr(), style: const TextStyle(color: Colors.white38)));
           }
 
           final fmt = NumberFormat('#,##0.00', 'ru_RU');
@@ -100,7 +101,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            t['description']?.toString() ?? 'Операция',
+                            t['description']?.toString() ?? 'client.operation'.tr(),
                             style: const TextStyle(color: Colors.white, fontSize: 14),
                           ),
                           const SizedBox(height: 4),
@@ -112,7 +113,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                     ),
                     Text(
-                      '${isPayment ? '+' : ''}${fmt.format(amount)} сом',
+                      '${isPayment ? '+' : ''}${fmt.format(amount)} ${'client.currency'.tr()}',
                       style: TextStyle(
                         color: color, fontSize: 15, fontWeight: FontWeight.bold),
                     ),

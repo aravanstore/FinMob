@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'services/auth_service.dart';
 import 'screens/login_screen.dart';
@@ -22,25 +23,36 @@ void main() async {
 
   runApp(
     EasyLocalization(
-      supportedLocales: const [Locale('ru'), Locale('kg')],
+      supportedLocales: const [Locale('ru'), Locale('ky'), Locale('en')],
       path: 'assets/translations',
       fallbackLocale: const Locale('ru'),
+      useOnlyLangCode: true,
+      saveLocale: false,
       child: ChangeNotifierProvider(
         create: (_) => authService,
-        child: const FinCoreApp(),
+        child: FinCoreApp(),
       ),
     ),
   );
 }
 
-class FinCoreApp extends StatelessWidget {
+class FinCoreApp extends StatefulWidget {
   const FinCoreApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final auth = context.watch<AuthService>();
+  State<FinCoreApp> createState() => _FinCoreAppState();
+}
 
-    final router = GoRouter(
+class _FinCoreAppState extends State<FinCoreApp> {
+  late final GoRouter _router;
+
+  @override
+  void initState() {
+    super.initState();
+    final auth = context.read<AuthService>();
+
+    _router = GoRouter(
+      refreshListenable: auth,
       initialLocation: auth.isLoggedIn
           ? (auth.role == 'staff' ? '/staff' : '/dashboard')
           : '/login',
@@ -74,17 +86,32 @@ class FinCoreApp extends StatelessWidget {
           builder: (_, __) => const SharesHistoryScreen(),
         ),
       ],
-    );
+      redirect: (context, state) {
+        final loggedIn = auth.isLoggedIn;
+        final goingToLogin = state.matchedLocation == '/login';
 
+        if (!loggedIn && !goingToLogin) return '/login';
+        if (loggedIn && goingToLogin) {
+          return auth.role == 'staff' ? '/staff' : '/dashboard';
+        }
+        return null;
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'FinCore',
       debugShowCheckedModeBanner: false,
-
-      // Настройки локализации
-      localizationsDelegates: context.localizationDelegates,
+      localizationsDelegates: [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        ...context.localizationDelegates,
+      ],
       supportedLocales: context.supportedLocales,
       locale: context.locale,
-
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF1A56DB),
@@ -93,7 +120,7 @@ class FinCoreApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Roboto',
       ),
-      routerConfig: router,
+      routerConfig: _router,
     );
   }
 }

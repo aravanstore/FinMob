@@ -2,7 +2,7 @@
   "login": {
     "title": "Личный кабинет заёмщика",
     "org_code": "Код организации",
-    "org_code_hint": "напр. aravan_1",
+    "org_code_hint": "напр. boy",
     "phone": "Номер телефона",
     "pin": "PIN-код",
     "button": "Войти",
@@ -10,9 +10,44 @@
     "error_pin": "PIN — минимум 4 цифры"
   },
   "staff": {
-    "dashboard": "Рабочее место",
-    "search": "Поиск",
+    "dashboard": "Личный кабинет сотрудника",
+    "home": "Главная",
+    "clients": "Клиенты",
     "approvals": "Одобрения",
-    "overdue": "Просрочка"
+    "overdue": "Просрочка",
+    "welcome": "Добро пожаловать!",
+    "question": "Что вы хотите сделать сегодня?",
+    "accounts": "Состояние счетов",
+    "actions": "Быстрые действия",
+    "search_hint": "Поиск клиентов...",
+    "no_approvals": "Нет заявок на одобрение",
+    "no_overdue": "Нет просроченных кредитов"
+  },
+  "client": {
+    "my_loans": "Мои кредиты",
+    "shares": "Паи",
+    "shares_total": "Сумма паёв",
+    "no_loans": "У вас пока нет кредитов",
+    "no_connection": "Нет соединения с сервером",
+    "retry": "Повторить",
+    "active_loans": "Активные кредиты",
+    "loan_id": "Кредит №",
+    "debt": "Остаток",
+    "next_pay": "След. платеж",
+    "history": "История",
+    "schedule": "График",
+    "history_title": "История операций",
+    "no_history": "Нет операций",
+    "error_loading": "Ошибка загрузки",
+    "operation": "Операция",
+    "currency": "сом",
+    "schedule_title": "График платежей",
+    "date": "Дата",
+    "payment": "Платеж",
+    "principal": "Осн. долг",
+    "interest": "Проценты",
+    "paid": "Оплачено",
+    "total": "Итого",
+    "shares_history": "История паёв"
   }
 }
