@@ -7,7 +7,14 @@ app.use(cors());
 app.use(express.json());
 
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  const fs = require('fs');
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const msg = `[${new Date().toISOString()}] ${req.method} ${req.url} ${res.statusCode} (${duration}ms)\n`;
+    fs.appendFileSync('requests.log', msg);
+    console.log(msg);
+  });
   next();
 });
 
@@ -16,6 +23,8 @@ app.use('/api/auth',     require('./routes/auth'));
 app.use('/api/loans',    require('./routes/loans'));
 app.use('/api/shares',   require('./routes/shares'));
 app.use('/api/payments', require('./routes/payments'));
+app.use('/api/inquiries', require('./routes/inquiries'));
+app.use('/api/announcements', require('./routes/announcements'));
 
 // Сотрудники: ТОЛЬКО ЧТЕНИЕ (read-only)
 // Правило безопасности: мобильный может попасть в чужие руки.

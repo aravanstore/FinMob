@@ -3,9 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// FinCore Mobile API base URL
 /// В продакшне замените на ваш Cloudflare Tunnel домен
-const _baseUrl = 'http://10.0.2.2:3002';
-// Для реального телефона используйте IP вашего ПК:
-// const _baseUrl = 'http://192.168.1.XXX:3002';
+const _baseUrl = 'http://192.168.2.108:3002';
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
@@ -136,6 +134,16 @@ class ApiService {
     return response.data as List<dynamic>;
   }
 
+  Future<Map<String, dynamic>> getLoanDetails(String loanId) async {
+    final response = await _dio.get('/api/staff/loans/$loanId');
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<List<dynamic>> getClientShareHistory(String clientId) async {
+    final response = await _dio.get('/api/staff/clients/$clientId/shares');
+    return response.data as List<dynamic>;
+  }
+
   Future<List<dynamic>> getApprovals() async {
     final response = await _dio.get('/api/staff/approvals');
     return response.data as List<dynamic>;
@@ -144,6 +152,27 @@ class ApiService {
   Future<Map<String, dynamic>> getDashboardStats() async {
     final response = await _dio.get('/api/staff/dashboard-stats');
     return response.data as Map<String, dynamic>;
+  }
+
+  Future<void> sendInquiry(String type, String message) async {
+    await _dio.post('/api/inquiries', data: {
+      'type': type,
+      'message': message,
+    });
+  }
+
+  Future<List<dynamic>> getInquiries() async {
+    final response = await _dio.get('/api/inquiries');
+    return response.data as List<dynamic>;
+  }
+
+  Future<dynamic> getActiveAnnouncement() async {
+    try {
+      final response = await _dio.get('/api/announcements/active');
+      return response.data;
+    } catch (e) {
+      return null;
+    }
   }
 
   // ─── HEALTH ───────────────────────────────────────────────────────────────

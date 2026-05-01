@@ -23,6 +23,66 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _loansFuture = _loadLoans();
     _sharesFuture = _api.getSharesSummary();
+    
+    // Проверка объявлений только один раз при загрузке
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAnnouncements();
+    });
+  }
+
+  Future<void> _checkAnnouncements() async {
+    try {
+      final announcement = await _api.getActiveAnnouncement();
+      if (announcement != null && mounted) {
+        _showAnnouncementDialog(announcement);
+      }
+    } catch (e) {
+      debugPrint('Check announcements error: $e');
+    }
+  }
+
+  void _showAnnouncementDialog(dynamic data) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.campaign, color: Colors.amber, size: 30),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                data['title'] ?? 'Объявление',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Divider(color: Colors.white12),
+            const SizedBox(height: 10),
+            Text(
+              data['message'] ?? '',
+              style: const TextStyle(color: Colors.white70, fontSize: 16, height: 1.4),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Понятно',
+              style: TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<List<Loan>> _loadLoans() async {
@@ -88,7 +148,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: CircularProgressIndicator(color: Color(0xFF1A56DB)));
           }
           if (snap.hasError) {
-            print("Dashboard _loadLoans Error: ${snap.error}");
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -123,16 +182,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 FutureBuilder<Map<String, dynamic>>(
                   future: _sharesFuture,
                   builder: (context, shareSnap) {
-                    if (shareSnap.hasError) {
-                      print("Dashboard Shares Error: ${shareSnap.error}");
-                      return const SizedBox.shrink();
-                    }
                     if (shareSnap.hasData) {
                       final s = shareSnap.data!;
-                      return _SharesCard(
-                        shares:    _d(s['share_balance']),
-                        dividends: _d(s['accrued_dividends']),
-                        fmt: fmt,
+                      return Column(
+                        children: [
+                          _SharesCard(
+                            shares:    _d(s['share_balance']),
+                            dividends: _d(s['accrued_dividends']),
+                            fmt: fmt,
+                          ),
+                          const SizedBox(height: 16),
+                          _ContactSection(),
+                        ],
                       );
                     }
                     return const SizedBox.shrink();
@@ -156,7 +217,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           );
         },
       ),
-      // Кнопка QR оплаты
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.go('/payments'),
         backgroundColor: const Color(0xFF1A56DB),
@@ -191,7 +251,6 @@ class _LoanCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Шапка карточки
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -208,11 +267,7 @@ class _LoanCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  loan.isOverdue
-                      ? 'Просрочен'
-                      : loan.isActive
-                          ? 'Активен'
-                          : 'Закрыт',
+                  loan.isOverdue ? 'Просрочен' : loan.isActive ? 'Активен' : 'Закрыт',
                   style: TextStyle(
                       color: color, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
@@ -220,8 +275,6 @@ class _LoanCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-
-          // Основной долг
           Text(
             '${fmt.format(loan.totalDebt)} сом',
             style: const TextStyle(
@@ -229,10 +282,7 @@ class _LoanCard extends StatelessWidget {
           ),
           const Text('Остаток основного долга',
               style: TextStyle(color: Colors.white38, fontSize: 12)),
-
           const SizedBox(height: 16),
-
-          // Детали: полное погашение, ставка, даты
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -261,9 +311,7 @@ class _LoanCard extends StatelessWidget {
               ],
             ),
           ),
-
           const SizedBox(height: 16),
-          // Прогресс-бар
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
@@ -278,9 +326,7 @@ class _LoanCard extends StatelessWidget {
             'Выплачено ${(loan.paidPercent * 100).toStringAsFixed(0)}%',
             style: const TextStyle(color: Colors.white38, fontSize: 11),
           ),
-
           const SizedBox(height: 16),
-          // Кнопки действий
           Row(
             children: [
               Expanded(
@@ -290,9 +336,6 @@ class _LoanCard extends StatelessWidget {
                   label: const Text('График', style: TextStyle(color: Colors.white)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2563EB),
-                    foregroundColor: Colors.white,
-                    elevation: 4,
-                    shadowColor: Colors.black.withOpacity(0.5),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
@@ -306,9 +349,6 @@ class _LoanCard extends StatelessWidget {
                   label: const Text('История', style: TextStyle(color: Colors.white)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF334155),
-                    foregroundColor: Colors.white,
-                    elevation: 4,
-                    shadowColor: Colors.black.withOpacity(0.5),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
@@ -326,8 +366,7 @@ class _LoanCard extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label,
-            style: const TextStyle(color: Colors.white54, fontSize: 12)),
+        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
         Text(value,
             style: TextStyle(
                 color: color,
@@ -342,12 +381,7 @@ class _SharesCard extends StatelessWidget {
   final double shares;
   final double dividends;
   final NumberFormat fmt;
-
-  const _SharesCard({
-    required this.shares,
-    required this.dividends,
-    required this.fmt,
-  });
+  const _SharesCard({required this.shares, required this.dividends, required this.fmt});
 
   @override
   Widget build(BuildContext context) {
@@ -361,39 +395,18 @@ class _SharesCard extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.white10),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Паи и Дивиденды',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold)),
-            ],
-          ),
+          const Text('Паи и Дивиденды',
+              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(
-                child: _statColumn(
-                    'Мои паи', '${fmt.format(shares)} сом', Colors.blueAccent),
-              ),
+              Expanded(child: _statColumn('Мои паи', '${fmt.format(shares)} сом', Colors.blueAccent)),
               Container(width: 1, height: 40, color: Colors.white10),
-              Expanded(
-                child: _statColumn('Дивиденды', '${fmt.format(dividends)} сом',
-                    Colors.greenAccent),
-              ),
+              Expanded(child: _statColumn('Дивиденды', '${fmt.format(dividends)} сом', Colors.greenAccent)),
             ],
           ),
           const SizedBox(height: 16),
@@ -402,13 +415,9 @@ class _SharesCard extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: () => context.go('/shares-history'),
               icon: const Icon(Icons.history, size: 16, color: Colors.white),
-              label: const Text('История операций', 
-                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+              label: const Text('История операций', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1A56DB),
-                foregroundColor: Colors.white,
-                elevation: 6,
-                shadowColor: Colors.blueAccent.withOpacity(0.5),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -421,15 +430,56 @@ class _SharesCard extends StatelessWidget {
 
   Widget _statColumn(String label, String value, Color color) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(label,
-            style: const TextStyle(color: Colors.white38, fontSize: 12)),
+        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 12)),
         const SizedBox(height: 4),
-        Text(value,
-            style: TextStyle(
-                color: color, fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(value, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
       ],
+    );
+  }
+}
+
+class _ContactSection extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B).withOpacity(0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A56DB).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.headset_mic_rounded, color: Color(0xFF3B82F6), size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Появились вопросы?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                Text('Свяжитесь с нами или оставьте заявку', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11)),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => context.push('/inquiry'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1A56DB),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Связаться', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 }

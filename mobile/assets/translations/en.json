@@ -19,7 +19,7 @@
     "question": "What would you like to do today?",
     "accounts": "Account Status",
     "actions": "Quick Actions",
-    "search_hint": "Search clients...",
+    "search_hint": "Search (Name, INN, Phone)",
     "no_approvals": "No pending approvals",
     "no_overdue": "No overdue loans"
   },

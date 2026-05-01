@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -6,422 +7,930 @@ import 'package:intl/intl.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 
+// ─── Цветовая палитра ────────────────────────────────────────────────────────
+class _C {
+  static const bg       = Color(0xFF080E1A);
+  static const surface  = Color(0xFF0F1829);
+  static const card     = Color(0xFF141F33);
+  static const border   = Color(0xFF1E2D47);
+  static const accent   = Color(0xFF2563EB);
+  static const accentLt = Color(0xFF3B82F6);
+  static const gold     = Color(0xFFF59E0B);
+  static const green    = Color(0xFF10B981);
+  static const red      = Color(0xFFEF4444);
+  static const orange   = Color(0xFFF97316);
+  static const textPri  = Color(0xFFEFF6FF);
+  static const textSec  = Color(0xFF64748B);
+  static const textHint = Color(0xFF334155);
+}
+
 class StaffDashboardScreen extends StatefulWidget {
   const StaffDashboardScreen({super.key});
   @override
   State<StaffDashboardScreen> createState() => _StaffDashboardScreenState();
 }
 
-class _StaffDashboardScreenState extends State<StaffDashboardScreen> {
+class _StaffDashboardScreenState extends State<StaffDashboardScreen>
+    with SingleTickerProviderStateMixin {
   int _tabIndex = 0;
   final _api = ApiService();
-  
-  // Search state
+
   final _searchCtrl = TextEditingController();
+  final _searchFocus = FocusNode();
   List<dynamic> _searchResults = [];
   bool _isSearching = false;
 
-  // Dashboard Stats state
   late Future<Map<String, dynamic>> _statsFuture;
-
-  // Overdue state
   late Future<List<dynamic>> _overdueFuture;
+  late Future<List<dynamic>> _approvalsFuture;
 
+  late AnimationController _fadeCtrl;
+  late Animation<double> _fadeAnim;
 
+  @override
+  void initState() {
+    super.initState();
+    _fadeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+    _fadeCtrl.forward();
+
+    _statsFuture     = _api.getDashboardStats();
+    _overdueFuture   = _api.getOverdueLoans();
+    _approvalsFuture = _api.getApprovals();
+    _doSearch();
+  }
+
+  @override
+  void dispose() {
+    _fadeCtrl.dispose();
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
 
   Future<void> _doSearch() async {
-    final q = _searchCtrl.text.trim();
-    
     setState(() => _isSearching = true);
     try {
-      final res = await _api.searchClients(q);
-      setState(() => _searchResults = res);
+      final res = await _api.searchClients(_searchCtrl.text.trim());
+      if (mounted) setState(() => _searchResults = res);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка загрузки: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            backgroundColor: _C.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSearching = false);
     }
   }
 
   @override
-  void initState() {
-    super.initState();
-    _overdueFuture = _api.getOverdueLoans();
-    _approvalsFuture = _api.getApprovals();
-    _statsFuture = _api.getDashboardStats();
-    _doSearch(); // Загружаем список клиентов по умолчанию
-  }
-
-  @override
   Widget build(BuildContext context) {
+    // ВАЖНО: Добавляем чтение locale, чтобы виджет перестраивался при смене языка
+    final currentLocale = context.locale; 
+    
     final auth = context.read<AuthService>();
-    final fmt = NumberFormat('#,##0.00', 'ru_RU');
+    final fmt  = NumberFormat('#,##0.00', currentLocale.languageCode == 'ru' ? 'ru_RU' : 'en_US');
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
-        elevation: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('staff.dashboard'.tr(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-            Text(auth.fullName, style: const TextStyle(color: Colors.white38, fontSize: 12)),
-          ],
-        ),
-        actions: [
-          PopupMenuButton<Locale>(
-            icon: const Icon(Icons.language, color: Colors.white54),
-            onSelected: (locale) {
-              print("SWITCHING LOCALE TO: ${locale.languageCode}");
-              EasyLocalization.of(context)!.setLocale(locale);
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: Locale('ru'), child: Text('Русский')),
-              const PopupMenuItem(value: Locale('ky'), child: Text('Кыргызча')),
-              const PopupMenuItem(value: Locale('en'), child: Text('English')),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: _C.bg,
+        appBar: _buildAppBar(auth),
+        body: FadeTransition(
+          opacity: _fadeAnim,
+          child: IndexedStack(
+            index: _tabIndex,
+            children: [
+              _buildHomeTab(fmt),
+              _buildSearchTab(fmt),
+              _buildApprovalsTab(fmt),
+              _buildOverdueTab(fmt),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white54),
+        ),
+        bottomNavigationBar: _buildBottomNav(),
+      ),
+    );
+  }
+
+  // ─── AppBar ────────────────────────────────────────────────────────────────
+  PreferredSizeWidget _buildAppBar(AuthService auth) {
+    return AppBar(
+      backgroundColor: _C.bg,
+      elevation: 0,
+      systemOverlayStyle: SystemUiOverlayStyle.light,
+      titleSpacing: 20,
+      title: Row(
+        children: [
+          Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [_C.accent, _C.accentLt],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.account_balance_rounded, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'staff.dashboard'.tr(),
+                style: const TextStyle(
+                  color: _C.textPri,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  letterSpacing: 0.2,
+                ),
+              ),
+              Text(
+                auth.fullName,
+                style: const TextStyle(color: _C.textSec, fontSize: 11),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        _LangButton(),
+        Container(
+          margin: const EdgeInsets.only(right: 8),
+          decoration: BoxDecoration(
+            color: _C.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _C.border),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.logout_rounded, color: _C.textSec, size: 20),
             onPressed: () async {
+              final auth = context.read<AuthService>();
               await auth.logout();
               if (context.mounted) context.go('/login');
             },
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  // ─── Bottom Nav ────────────────────────────────────────────────────────────
+  Widget _buildBottomNav() {
+    return Container(
+      decoration: BoxDecoration(
+        color: _C.surface,
+        border: Border(top: BorderSide(color: _C.border, width: 1)),
       ),
-      body: IndexedStack(
-        index: _tabIndex,
-        children: [
-          _buildHomeTab(fmt),
-          _buildSearchTab(fmt),
-          _buildApprovalsTab(fmt),
-          _buildOverdueTab(fmt),
-        ],
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _tabIndex,
-        onTap: (i) => setState(() => _tabIndex = i),
-        backgroundColor: const Color(0xFF1E293B),
-        selectedItemColor: const Color(0xFF1A56DB),
-        unselectedItemColor: Colors.white38,
-        type: BottomNavigationBarType.fixed,
-        items: [
-          BottomNavigationBarItem(icon: const Icon(Icons.home), label: 'staff.home'.tr()),
-          BottomNavigationBarItem(icon: const Icon(Icons.people), label: 'staff.clients'.tr()),
-          BottomNavigationBarItem(icon: const Icon(Icons.fact_check), label: 'staff.approvals'.tr()),
-          BottomNavigationBarItem(icon: const Icon(Icons.warning_amber_rounded), label: 'staff.overdue'.tr()),
-        ],
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _NavItem(icon: Icons.home_rounded,           label: 'staff.home'.tr(),      index: 0, current: _tabIndex, onTap: _setTab),
+              _NavItem(icon: Icons.people_alt_rounded,     label: 'staff.clients'.tr(),   index: 1, current: _tabIndex, onTap: _setTab),
+              _NavItem(icon: Icons.fact_check_rounded,     label: 'staff.approvals'.tr(), index: 2, current: _tabIndex, onTap: _setTab),
+              _NavItem(icon: Icons.warning_amber_rounded,  label: 'staff.overdue'.tr(),   index: 3, current: _tabIndex, onTap: _setTab),
+            ],
+          ),
+        ),
       ),
     );
   }
 
+  void _setTab(int i) => setState(() => _tabIndex = i);
+
+  // ─── HOME TAB ──────────────────────────────────────────────────────────────
   Widget _buildHomeTab(NumberFormat fmt) {
     return RefreshIndicator(
-      onRefresh: () async {
-        setState(() {
-          _statsFuture = _api.getDashboardStats();
-        });
-      },
+      color: _C.accentLt,
+      backgroundColor: _C.card,
+      onRefresh: () async => setState(() => _statsFuture = _api.getDashboardStats()),
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF1A56DB), Color(0xFF3B82F6)]),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('staff.welcome'.tr(), style: const TextStyle(color: Colors.white70, fontSize: 14)),
-                const SizedBox(height: 8),
-                Text('staff.question'.tr(), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
+          // Приветственный баннер
+          _WelcomeBanner(),
           const SizedBox(height: 24),
-          
-          Text('staff.accounts'.tr(), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+
+          // Счета
+          _SectionHeader(title: 'staff.accounts'.tr()),
           const SizedBox(height: 12),
           FutureBuilder<Map<String, dynamic>>(
             future: _statsFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const _CardSkeleton(height: 100);
               }
-              if (snapshot.hasError) {
-                return Center(child: Text('Ошибка: ${snapshot.error}', style: const TextStyle(color: Colors.redAccent)));
+              if (snap.hasError) {
+                return _ErrorTile(message: snap.error.toString());
               }
-              final data = snapshot.data ?? {'cash_balance': 0, 'bank_balance': 0};
+              final data = snap.data ?? {'cash_balance': 0, 'bank_balance': 0};
               return Row(
                 children: [
-                  Expanded(
-                    child: _balanceCard(
-                      'Касса (10001)', 
-                      '${fmt.format(data['cash_balance'])} сом', 
-                      Icons.account_balance_wallet, 
-                      Colors.green
-                    ),
-                  ),
+                  Expanded(child: _BalanceCard(
+                    label: 'Касса',
+                    code: '10001',
+                    amount: fmt.format(data['cash_balance']),
+                    icon: Icons.account_balance_wallet_rounded,
+                    color: _C.green,
+                  )),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: _balanceCard(
-                      'Кор счет (10101)', 
-                      '${fmt.format(data['bank_balance'])} сом', 
-                      Icons.account_balance, 
-                      Colors.orange
-                    ),
-                  ),
+                  Expanded(child: _BalanceCard(
+                    label: 'Кор. счёт',
+                    code: '10101',
+                    amount: fmt.format(data['bank_balance']),
+                    icon: Icons.account_balance_rounded,
+                    color: _C.gold,
+                  )),
                 ],
               );
             },
           ),
-          
-          const SizedBox(height: 24),
-          Text('staff.actions'.tr(), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 16,
-          crossAxisSpacing: 16,
-          children: [
-            _homeButton(Icons.people, 'staff.clients'.tr(), Colors.blue, () => setState(() => _tabIndex = 1)),
-            _homeButton(Icons.fact_check, 'staff.approvals'.tr(), Colors.orange, () => setState(() => _tabIndex = 2)),
-            _homeButton(Icons.warning_amber_rounded, 'staff.overdue'.tr(), Colors.redAccent, () => setState(() => _tabIndex = 3)),
-            _homeButton(Icons.add_card, 'Новый займ', Colors.green, () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('В разработке')));
-            }),
-          ],
-        ),
-      ],
-    ),
-    );
-  }
 
-  Widget _balanceCard(String title, String amount, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 28),
+          const SizedBox(height: 24),
+          _SectionHeader(title: 'staff.actions'.tr()),
           const SizedBox(height: 12),
-          Text(title, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-          const SizedBox(height: 4),
-          Text(amount, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 1.1,
+            children: [
+              _ActionCard(
+                icon: Icons.people_alt_rounded,
+                label: 'staff.clients'.tr(),
+                color: _C.accentLt,
+                onTap: () => _setTab(1),
+              ),
+              _ActionCard(
+                icon: Icons.fact_check_rounded,
+                label: 'staff.approvals'.tr(),
+                color: _C.orange,
+                onTap: () => _setTab(2),
+              ),
+              _ActionCard(
+                icon: Icons.warning_amber_rounded,
+                label: 'staff.overdue'.tr(),
+                color: _C.red,
+                onTap: () => _setTab(3),
+              ),
+              _ActionCard(
+                icon: Icons.add_card_rounded,
+                label: 'Новый займ',
+                color: _C.green,
+                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('В разработке'), behavior: SnackBarBehavior.floating),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _homeButton(IconData icon, String title, Color color, VoidCallback onTap) {
-    return InkWell(
+  // ─── SEARCH TAB ────────────────────────────────────────────────────────────
+  Widget _buildSearchTab(NumberFormat fmt) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          color: _C.bg,
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: _C.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: _C.border),
+                  ),
+                  child: TextFormField(
+                    key: const Key('search_field_fixed'),
+                    controller: _searchCtrl,
+                    focusNode: _searchFocus,
+                    autofocus: true,
+                    keyboardType: TextInputType.text,
+                    textInputAction: TextInputAction.search,
+                    style: const TextStyle(
+                      color: _C.textPri, 
+                      fontSize: 15,
+                      fontFamily: 'sans-serif', // Системный шрифт
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'staff.search_hint'.tr(),
+                      hintStyle: const TextStyle(color: _C.textHint, fontSize: 15),
+                      prefixIcon: const Icon(Icons.search_rounded, color: _C.textSec, size: 20),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    ),
+                    onChanged: (v) { 
+                      if (v.isEmpty || v.length > 1) _doSearch(); 
+                    },
+                    onFieldSubmitted: (_) => _doSearch(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Создание клиента в разработке'), behavior: SnackBarBehavior.floating),
+                ),
+                child: Container(
+                  width: 48, height: 48,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [_C.accent, _C.accentLt]),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.person_add_rounded, color: Colors.white, size: 22),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        if (_isSearching)
+          LinearProgressIndicator(
+            backgroundColor: _C.surface,
+            color: _C.accentLt,
+            minHeight: 2,
+          ),
+
+        Expanded(
+          child: _searchResults.isEmpty
+              ? _EmptyState(
+                  icon: Icons.manage_search_rounded,
+                  message: _searchCtrl.text.isEmpty
+                      ? 'Список клиентов'
+                      : 'Ничего не найдено',
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  itemCount: _searchResults.length,
+                  itemBuilder: (ctx, i) => _ClientCard(
+                    client: _searchResults[i],
+                    fmt: fmt,
+                    onTap: () => context.push('/staff/client/${_searchResults[i]['client_id']}'),
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  // ─── APPROVALS TAB ────────────────────────────────────────────────────────
+  Widget _buildApprovalsTab(NumberFormat fmt) {
+    return FutureBuilder<List<dynamic>>(
+      future: _approvalsFuture,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: _C.accentLt));
+        }
+        if (snap.hasError) return _ErrorTile(message: snap.error.toString());
+
+        final list = snap.data ?? [];
+        if (list.isEmpty) {
+          return _EmptyState(icon: Icons.fact_check_rounded, message: 'staff.no_approvals'.tr());
+        }
+
+        return RefreshIndicator(
+          color: _C.accentLt,
+          backgroundColor: _C.card,
+          onRefresh: () async => setState(() => _approvalsFuture = _api.getApprovals()),
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            itemCount: list.length,
+            itemBuilder: (ctx, i) {
+              final item = list[i];
+              return _ApprovalCard(
+                item: item,
+                fmt: fmt,
+                onTap: () => context.push('/staff/client/${item['client_id']}'),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  // ─── OVERDUE TAB ──────────────────────────────────────────────────────────
+  Widget _buildOverdueTab(NumberFormat fmt) {
+    return FutureBuilder<List<dynamic>>(
+      future: _overdueFuture,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: _C.accentLt));
+        }
+        if (snap.hasError) return _ErrorTile(message: snap.error.toString());
+
+        final list = snap.data ?? [];
+        if (list.isEmpty) {
+          return _EmptyState(icon: Icons.check_circle_rounded, message: 'staff.no_overdue'.tr());
+        }
+
+        return RefreshIndicator(
+          color: _C.accentLt,
+          backgroundColor: _C.card,
+          onRefresh: () async => setState(() => _overdueFuture = _api.getOverdueLoans()),
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            itemCount: list.length,
+            itemBuilder: (ctx, i) {
+              final item = list[i];
+              return _OverdueCard(
+                item: item,
+                fmt: fmt,
+                onTap: () => context.push('/staff/client/${item['client_id']}'),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ВСПОМОГАТЕЛЬНЫЕ ВИДЖЕТЫ
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _LangButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      decoration: BoxDecoration(
+        color: _C.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _C.border),
+      ),
+      child: PopupMenuButton<Locale>(
+        icon: const Icon(Icons.language_rounded, color: _C.textSec, size: 20),
+        color: _C.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: _C.border),
+        ),
+        onSelected: (locale) => EasyLocalization.of(context)!.setLocale(locale),
+        itemBuilder: (_) => [
+          _langItem('RU', 'Русский',   const Locale('ru')),
+          _langItem('KY', 'Кыргызча', const Locale('ky')),
+          _langItem('EN', 'English',   const Locale('en')),
+        ],
+      ),
+    );
+  }
+
+  PopupMenuItem<Locale> _langItem(String code, String label, Locale locale) {
+    return PopupMenuItem(
+      value: locale,
+      child: Row(
+        children: [
+          Container(
+            width: 32, height: 22,
+            decoration: BoxDecoration(
+              color: _C.border,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            alignment: Alignment.center,
+            child: Text(code, style: const TextStyle(color: _C.textPri, fontSize: 11, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 12),
+          Text(label, style: const TextStyle(color: _C.textPri)),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int index;
+  final int current;
+  final void Function(int) onTap;
+
+  const _NavItem({required this.icon, required this.label, required this.index, required this.current, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final active = index == current;
+    return GestureDetector(
+      onTap: () => onTap(index),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? _C.accent.withOpacity(0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: active ? _C.accentLt : _C.textSec, size: 22),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: active ? _C.accentLt : _C.textSec,
+                fontSize: 10,
+                fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WelcomeBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1D3A6E), Color(0xFF1A56DB)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: _C.accent.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('staff.welcome'.tr(), style: const TextStyle(color: Colors.white60, fontSize: 13)),
+                const SizedBox(height: 6),
+                Text('staff.question'.tr(), style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700, height: 1.3)),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(Icons.bar_chart_rounded, color: Colors.white, size: 28),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  const _SectionHeader({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(width: 3, height: 16, decoration: BoxDecoration(color: _C.accentLt, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 10),
+        Text(title, style: const TextStyle(color: _C.textPri, fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 0.2)),
+      ],
+    );
+  }
+}
+
+class _BalanceCard extends StatelessWidget {
+  final String label, code, amount;
+  final IconData icon;
+  final Color color;
+  const _BalanceCard({required this.label, required this.code, required this.amount, required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _C.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _C.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, color: color, size: 18),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text('$label ($code)', style: const TextStyle(color: _C.textSec, fontSize: 11)),
+          const SizedBox(height: 4),
+          Text('$amount сом', style: const TextStyle(color: _C.textPri, fontSize: 15, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _ActionCard({required this.icon, required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: _C.card,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withOpacity(0.2)),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-              child: Icon(icon, color: color, size: 32),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: color, size: 26),
             ),
-            const SizedBox(height: 12),
-            Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            Text(label, style: const TextStyle(color: _C.textPri, fontWeight: FontWeight.w600, fontSize: 13), textAlign: TextAlign.center),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildSearchTab(NumberFormat fmt) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchCtrl,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'staff.search_hint'.tr(),
-                    hintStyle: const TextStyle(color: Colors.white24),
-                    prefixIcon: const Icon(Icons.search, color: Colors.white38),
-                    filled: true,
-                    fillColor: Colors.white.withOpacity(0.05),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                  onChanged: (v) {
-                    if (v.isEmpty || v.length > 1) _doSearch();
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A56DB),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.person_add, color: Colors.white),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Создание клиента в разработке')));
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (_isSearching)
-          const LinearProgressIndicator(backgroundColor: Colors.transparent, color: Color(0xFF1A56DB)),
-        Expanded(
-          child: _searchResults.isEmpty
-              ? Center(child: Text(_searchCtrl.text.isEmpty ? 'Введите данные для поиска' : 'Ничего не найдено', style: const TextStyle(color: Colors.white38)))
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _searchResults.length,
-                  itemBuilder: (ctx, i) {
-                    final c = _searchResults[i];
-                    return _clientCard(c, fmt);
-                  },
-                ),
-        ),
-      ],
-    );
-  }
+class _ClientCard extends StatelessWidget {
+  final dynamic client;
+  final NumberFormat fmt;
+  final VoidCallback onTap;
+  const _ClientCard({required this.client, required this.fmt, required this.onTap});
 
-  Widget _clientCard(dynamic c, NumberFormat fmt) {
-    return Card(
-      color: const Color(0xFF1E293B),
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        title: Text(c['full_name'] ?? 'Без имени', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  @override
+  Widget build(BuildContext context) {
+    final loans   = client['active_loans_count'] ?? 0;
+    final balance = double.tryParse(client['total_balance']?.toString() ?? '0') ?? 0;
+    final phone   = client['phone_main'] ?? '';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _C.card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _C.border),
+        ),
+        child: Row(
           children: [
-            const SizedBox(height: 4),
-            Text(c['phone_main'] ?? '-', style: const TextStyle(color: Colors.white54)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _badge('${c['active_loans_count']} кр.', Colors.blue),
-                const SizedBox(width: 8),
-                Text('${fmt.format(double.parse(c['total_balance'].toString()))} сом', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w500)),
-              ],
+            Container(
+              width: 42, height: 42,
+              decoration: BoxDecoration(
+                color: _C.accent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                (client['full_name'] ?? '?').toString().substring(0, 1),
+                style: const TextStyle(color: _C.accentLt, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
             ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(client['full_name'] ?? 'Без имени',
+                      style: const TextStyle(color: _C.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                  const SizedBox(height: 3),
+                  Text(phone, style: const TextStyle(color: _C.textSec, fontSize: 12)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      _Chip(label: '$loans кр.', color: _C.accentLt),
+                      const SizedBox(width: 8),
+                      Text('${fmt.format(balance)} сом',
+                          style: const TextStyle(color: _C.green, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: _C.textHint, size: 20),
           ],
         ),
-        trailing: const Icon(Icons.chevron_right, color: Colors.white24),
-        onTap: () => context.push('/staff/client/${c['client_id']}'),
       ),
     );
   }
+}
 
-  Widget _badge(String text, Color color) {
+class _ApprovalCard extends StatelessWidget {
+  final dynamic item;
+  final NumberFormat fmt;
+  final VoidCallback onTap;
+  const _ApprovalCard({required this.item, required this.fmt, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final amount = double.tryParse(item['loan_amount']?.toString() ?? '0') ?? 0;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _C.card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _C.orange.withOpacity(0.2)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42, height: 42,
+              decoration: BoxDecoration(
+                color: _C.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(Icons.hourglass_top_rounded, color: _C.orange, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item['full_name'] ?? '',
+                      style: const TextStyle(color: _C.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Text('${item['purpose'] ?? 'Кредит'} · ${fmt.format(amount)} сом',
+                      style: const TextStyle(color: _C.orange, fontSize: 12)),
+                ],
+              ),
+            ),
+            _Chip(label: item['status'] ?? 'Заявка', color: _C.orange),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OverdueCard extends StatelessWidget {
+  final dynamic item;
+  final NumberFormat fmt;
+  final VoidCallback onTap;
+  const _OverdueCard({required this.item, required this.fmt, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final debt = double.tryParse(item['principal_balance']?.toString() ?? '0') ?? 0;
+    final days = item['days_overdue'] ?? 0;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _C.card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _C.red.withOpacity(0.2)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42, height: 42,
+              decoration: BoxDecoration(
+                color: _C.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(Icons.warning_rounded, color: _C.red, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item['full_name'] ?? '',
+                      style: const TextStyle(color: _C.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Text('${fmt.format(debt)} сом · $days дн.',
+                      style: const TextStyle(color: _C.red, fontSize: 12)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: _C.textHint, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _Chip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6), border: Border.all(color: color.withOpacity(0.3))),
-      child: Text(text, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
+}
 
-  // Approvals state
-  late Future<List<dynamic>> _approvalsFuture;
+class _CardSkeleton extends StatelessWidget {
+  final double height;
+  const _CardSkeleton({required this.height});
 
-
-
-  Widget _buildApprovalsTab(NumberFormat fmt) {
-    return FutureBuilder<List<dynamic>>(
-      future: _approvalsFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text('Ошибка: ${snapshot.error}', style: const TextStyle(color: Colors.white38)));
-        
-        final list = snapshot.data ?? [];
-        if (list.isEmpty) {
-          return Center(child: Text('staff.no_approvals'.tr(), style: const TextStyle(color: Colors.white38)));
-        }
-        return RefreshIndicator(
-          onRefresh: () async => setState(() => _approvalsFuture = _api.getApprovals()),
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: list.length,
-            itemBuilder: (ctx, i) {
-              final item = list[i];
-              return Card(
-                color: const Color(0xFF1E293B),
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: ListTile(
-                  title: Text(item['full_name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  subtitle: Text('${item['purpose'] ?? 'Кредит'} • ${fmt.format(double.parse(item['loan_amount'].toString()))} сом', style: const TextStyle(color: Colors.orangeAccent)),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-                    child: Text(item['status'] ?? 'Заявка', style: const TextStyle(color: Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
-                  ),
-                  onTap: () => context.push('/staff/client/${item['client_id']}'),
-                ),
-              );
-            },
-          ),
-        );
-      },
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: _C.card,
+        borderRadius: BorderRadius.circular(16),
+      ),
     );
   }
+}
 
-  Widget _buildOverdueTab(NumberFormat fmt) {
-    return FutureBuilder<List<dynamic>>(
-      future: _overdueFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text('Ошибка: ${snapshot.error}', style: const TextStyle(color: Colors.white38)));
-        
-        final list = snapshot.data ?? [];
-        if (list.isEmpty) {
-          return Center(child: Text('staff.no_overdue'.tr(), style: const TextStyle(color: Colors.white38)));
-        }
-        return RefreshIndicator(
-          onRefresh: () async => setState(() => _overdueFuture = _api.getOverdueLoans()),
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: list.length,
-            itemBuilder: (ctx, i) {
-              final item = list[i];
-              return Card(
-                color: const Color(0xFF1E293B),
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  title: Text(item['full_name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  subtitle: Text('Дней: ${item['days_overdue']} | Долг: ${fmt.format(double.parse(item['principal_balance'].toString()))} сом', style: const TextStyle(color: Colors.redAccent)),
-                  trailing: const Icon(Icons.chevron_right, color: Colors.white24),
-                  onTap: () => context.push('/staff/client/${item['client_id']}'),
-                ),
-              );
-            },
-          ),
-        );
-      },
+class _ErrorTile extends StatelessWidget {
+  final String message;
+  const _ErrorTile({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline_rounded, color: _C.red, size: 40),
+            const SizedBox(height: 12),
+            Text(message, style: const TextStyle(color: _C.textSec), textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  const _EmptyState({required this.icon, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: _C.textHint, size: 48),
+          const SizedBox(height: 12),
+          Text(message, style: const TextStyle(color: _C.textSec, fontSize: 14)),
+        ],
+      ),
     );
   }
 }

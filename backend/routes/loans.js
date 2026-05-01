@@ -155,6 +155,7 @@ router.get('/:loanId/transactions', auth, async (req, res) => {
        FROM transactions
        WHERE loan_id = $1
          AND (is_deleted = FALSE OR is_deleted IS NULL)
+         AND (description NOT LIKE 'Групповое начисление%' OR description IS NULL)
        ORDER BY transaction_date DESC, created_at DESC
        LIMIT 100`,
       [req.params.loanId]

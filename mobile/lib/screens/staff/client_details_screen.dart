@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import '../../services/api_service.dart';
 
 class ClientDetailsScreen extends StatefulWidget {
@@ -104,20 +105,23 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                       fontSize: 16,
                       fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  _summaryItem(
-                      'Баланс паёв (сом)',
-                      fmt.format(double.parse(
-                          (client['share_balance'] ?? 0).toString())),
-                      Colors.orange),
-                  const SizedBox(width: 12),
-                  _summaryItem(
-                      'Дивиденды (сом)',
-                      fmt.format(double.parse(
-                          (client['accrued_dividends'] ?? 0).toString())),
-                      Colors.amber),
-                ],
+              GestureDetector(
+                onTap: () => context.push('/staff/client/${widget.clientId}/shares', extra: {'name': client['full_name']}),
+                child: Row(
+                  children: [
+                    _summaryItem(
+                        'Баланс паёв (сом)',
+                        fmt.format(double.parse(
+                            (client['share_balance'] ?? 0).toString())),
+                        Colors.orange),
+                    const SizedBox(width: 12),
+                    _summaryItem(
+                        'Дивиденды (сом)',
+                        fmt.format(double.parse(
+                            (client['accrued_dividends'] ?? 0).toString())),
+                        Colors.amber),
+                  ],
+                ),
               ),
               const SizedBox(height: 20),
 
@@ -133,7 +137,10 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                     child: Text('Кредитов не найдено',
                         style: TextStyle(color: Colors.white38)))
               else
-                ...loans.map((l) => _loanTile(l, fmt)).toList(),
+                ...loans.map((l) => GestureDetector(
+                  onTap: () => context.push('/staff/loan/${l['loan_id']}'),
+                  child: _loanTile(l, fmt),
+                )).toList(),
             ],
           );
         },

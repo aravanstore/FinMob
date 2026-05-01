@@ -1,0 +1,24 @@
+[2026-05-01T13:17:49.462Z] POST /api/inquiries ERROR: неверный синтаксис для типа integer: "597672f2-aacb-4fbc-9ed1-95c02baac11e"
+STACK: error: неверный синтаксис для типа integer: "597672f2-aacb-4fbc-9ed1-95c02baac11e"
+    at C:\Projects\FinMob\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async C:\Projects\FinMob\backend\routes\inquiries.js:37:5
+BODY: {"type":"GENERAL","message":"4525432"}
+CLIENT: {"role":"client","clientId":"597672f2-aacb-4fbc-9ed1-95c02baac11e","phone":"996554026166","fullName":"Абдуллаев Бахриддин Ботирович","unionId":"d3386ff2-8722-4cf1-b062-8c33974d3b76","dbName":"boy","tenantName":"ОСНОВНОЙ ПРОЕКТ (Боевой запас)","iat":1777640033,"exp":1778244833}
+
+[2026-05-01T13:19:09.213Z] POST /api/inquiries ERROR: неверный синтаксис для типа integer: "597672f2-aacb-4fbc-9ed1-95c02baac11e"
+STACK: error: неверный синтаксис для типа integer: "597672f2-aacb-4fbc-9ed1-95c02baac11e"
+    at C:\Projects\FinMob\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async C:\Projects\FinMob\backend\routes\inquiries.js:37:5
+BODY: {"type":"GENERAL","message":"4525432"}
+CLIENT: {"role":"client","clientId":"597672f2-aacb-4fbc-9ed1-95c02baac11e","phone":"996554026166","fullName":"Абдуллаев Бахриддин Ботирович","unionId":"d3386ff2-8722-4cf1-b062-8c33974d3b76","dbName":"boy","tenantName":"ОСНОВНОЙ ПРОЕКТ (Боевой запас)","iat":1777640033,"exp":1778244833}
+
+[2026-05-01T13:19:50.726Z] POST /api/inquiries ERROR: неверный синтаксис для типа integer: "597672f2-aacb-4fbc-9ed1-95c02baac11e"
+STACK: error: неверный синтаксис для типа integer: "597672f2-aacb-4fbc-9ed1-95c02baac11e"
+    at C:\Projects\FinMob\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async C:\Projects\FinMob\backend\routes\inquiries.js:37:5
+BODY: {"type":"GENERAL","message":"fdgdregeger"}
+CLIENT: {"role":"client","clientId":"597672f2-aacb-4fbc-9ed1-95c02baac11e","phone":"996554026166","fullName":"Абдуллаев Бахриддин Ботирович","unionId":"d3386ff2-8722-4cf1-b062-8c33974d3b76","dbName":"boy","tenantName":"ОСНОВНОЙ ПРОЕКТ (Боевой запас)","iat":1777640033,"exp":1778244833}
+

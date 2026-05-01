@@ -48,8 +48,8 @@ router.get('/clients', auth, staffOnly, async (req, res) => {
          AND (
            $1::text = '%%'
            OR c.full_name ILIKE $1
-           OR c.phone_main LIKE $2
-           OR c.inn = $3
+           OR c.phone_main ILIKE $1
+           OR c.inn::text ILIKE $1
          )
        GROUP BY 
          c.client_id, 
@@ -61,8 +61,8 @@ router.get('/clients', auth, staffOnly, async (req, res) => {
          c.address_factual, 
          c.registration_date
        ORDER BY c.full_name
-       LIMIT $4`,
-      [`%${search}%`, `%${search}%`, search, limit]
+       LIMIT $2`,
+      [`%${search}%`, limit]
     );
 
     res.json(rows);
@@ -169,9 +169,44 @@ router.get('/loans/:loanId', auth, staffOnly, async (req, res) => {
       [req.params.loanId]
     );
 
-    res.json({ loan, schedule });
+    // История реальных платежей (транзакций) - исключаем начисления
+    const { rows: payments } = await pool.query(
+      `SELECT transaction_id, transaction_date, amount, description
+       FROM transactions
+       WHERE loan_id = $1
+         AND (is_deleted = FALSE OR is_deleted IS NULL)
+         AND transaction_type NOT IN ('INTEREST_ACCRUAL', 'PENALTY_ACCRUAL', 'ACCRUAL')
+         AND description NOT LIKE '%начисление%'
+       ORDER BY transaction_date DESC, created_at DESC`,
+      [req.params.loanId]
+    );
+
+    res.json({ loan, schedule, payments });
   } catch (err) {
     console.error('[GET /api/staff/loans/:loanId]', err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/staff/clients/:clientId/shares — история паёв клиента для сотрудника
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/clients/:clientId/shares', auth, staffOnly, async (req, res) => {
+  try {
+    const pool = getPool(req);
+    const { rows } = await pool.query(
+      `SELECT
+         transaction_id, transaction_date, transaction_type, amount, description
+       FROM transactions
+       WHERE client_id = $1
+         AND transaction_type IN ('SHARE_DEPOSIT', 'SHARE_WITHDRAW', 'DIVIDEND_PAYOUT', 'Паи')
+         AND (is_deleted = FALSE OR is_deleted IS NULL)
+       ORDER BY transaction_date DESC, created_at DESC`,
+      [req.params.clientId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[GET /api/staff/clients/:clientId/shares]', err);
     res.status(500).json({ error: 'Ошибка сервера' });
   }
 });

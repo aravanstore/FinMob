@@ -13,6 +13,9 @@ import 'screens/history_screen.dart';
 import 'screens/shares_history_screen.dart';
 import 'screens/staff/staff_dashboard_screen.dart';
 import 'screens/staff/client_details_screen.dart';
+import 'screens/staff/loan_details_screen.dart';
+import 'screens/staff/share_details_screen.dart';
+import 'screens/inquiry_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -68,6 +71,22 @@ class _FinCoreAppState extends State<FinCoreApp> {
             clientId: state.pathParameters['clientId']!,
           ),
         ),
+        GoRoute(
+          path: '/staff/client/:clientId/shares',
+          builder: (_, state) {
+            final extra = state.extra as Map<String, dynamic>?;
+            return ShareDetailsScreen(
+              clientId: state.pathParameters['clientId']!,
+              clientName: extra?['name'] ?? 'Клиент',
+            );
+          },
+        ),
+        GoRoute(
+          path: '/staff/loan/:loanId',
+          builder: (_, state) => LoanDetailsScreen(
+            loanId: state.pathParameters['loanId']!,
+          ),
+        ),
         GoRoute(path: '/payments', builder: (_, __) => const PaymentsScreen()),
         GoRoute(
           path: '/schedule/:loanId',
@@ -84,6 +103,10 @@ class _FinCoreAppState extends State<FinCoreApp> {
         GoRoute(
           path: '/shares-history',
           builder: (_, __) => const SharesHistoryScreen(),
+        ),
+        GoRoute(
+          path: '/inquiry',
+          builder: (_, __) => const InquiryScreen(),
         ),
       ],
       redirect: (context, state) {
@@ -118,7 +141,6 @@ class _FinCoreAppState extends State<FinCoreApp> {
           brightness: Brightness.dark,
         ),
         useMaterial3: true,
-        fontFamily: 'Roboto',
       ),
       routerConfig: _router,
     );
