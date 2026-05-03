@@ -309,4 +309,77 @@ router.get('/dashboard-stats', auth, staffOnly, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/staff/journal — общий журнал операций для сотрудника
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/journal', auth, staffOnly, async (req, res) => {
+  const { startDate, endDate, search, accountCode } = req.query;
+  const pool = getPool(req);
+
+  try {
+    let start = startDate;
+    let end = endDate;
+
+    // Если даты не переданы, ищем последние 2 дня, когда были операции
+    if (!start || !end) {
+      const { rows: dates } = await pool.query(
+        `SELECT DISTINCT transaction_date 
+         FROM transactions 
+         WHERE (is_deleted = FALSE OR is_deleted IS NULL)
+         ORDER BY transaction_date DESC 
+         LIMIT 2`
+      );
+      if (dates.length > 0) {
+        end = dates[0].transaction_date;
+        start = dates[dates.length - 1].transaction_date;
+      } else {
+        const today = new Date().toISOString().slice(0, 10);
+        end = today;
+        start = today;
+      }
+    }
+
+    const query = `
+      SELECT 
+        t.*, 
+        c.full_name as client_name 
+      FROM transactions t
+      LEFT JOIN clients c ON c.client_id = t.client_id
+      WHERE (t.is_deleted = FALSE OR t.is_deleted IS NULL)
+        AND t.transaction_date >= $1::date
+        AND t.transaction_date <= $2::date
+        AND (
+          $3::text IS NULL OR 
+          c.full_name ILIKE $4 OR 
+          t.description ILIKE $4 OR 
+          t.transaction_id::text ILIKE $4
+        )
+        AND (
+          $5::text IS NULL OR
+          t.debit_account = $5 OR
+          t.credit_account = $5
+        )
+      ORDER BY t.transaction_date DESC, t.created_at DESC
+      LIMIT 1000
+    `;
+
+    const { rows } = await pool.query(query, [
+      start, 
+      end, 
+      search ? 'search' : null, 
+      search ? `%${search}%` : null, 
+      accountCode || null
+    ]);
+
+    res.json({
+      startDate: start,
+      endDate: end,
+      transactions: rows
+    });
+  } catch (err) {
+    console.error('[GET /api/staff/journal]', err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
 module.exports = router;

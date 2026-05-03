@@ -153,6 +153,21 @@ class ApiService {
     return response.data as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> getJournal({
+    String? startDate,
+    String? endDate,
+    String? search,
+    String? accountCode,
+  }) async {
+    final response = await _dio.get('/api/staff/journal', queryParameters: {
+      if (startDate != null) 'startDate': startDate,
+      if (endDate != null) 'endDate': endDate,
+      if (search != null) 'search': search,
+      if (accountCode != null) 'accountCode': accountCode,
+    });
+    return response.data as Map<String, dynamic>;
+  }
+
   Future<void> sendInquiry(String type, String message) async {
     await _dio.post('/api/inquiries', data: {
       'type': type,

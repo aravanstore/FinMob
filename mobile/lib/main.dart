@@ -16,6 +16,7 @@ import 'screens/staff/staff_dashboard_screen.dart';
 import 'screens/staff/client_details_screen.dart';
 import 'screens/staff/loan_details_screen.dart';
 import 'screens/staff/share_details_screen.dart';
+import 'screens/staff/journal_screen.dart';
 import 'screens/inquiry_screen.dart';
 import 'theme/app_theme.dart';
 
@@ -112,6 +113,10 @@ class _FinCoreAppState extends State<FinCoreApp> {
         GoRoute(
           path: '/inquiry',
           builder: (_, __) => const InquiryScreen(),
+        ),
+        GoRoute(
+          path: '/staff/journal',
+          builder: (_, __) => const JournalScreen(),
         ),
       ],
       redirect: (context, state) {

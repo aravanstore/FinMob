@@ -293,6 +293,12 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                   const SnackBar(content: Text('В разработке'), behavior: SnackBarBehavior.floating),
                 ),
               ),
+              _ActionCard(
+                icon: Icons.assignment_rounded,
+                label: 'Журнал',
+                color: _C.accent,
+                onTap: () => context.push('/staff/journal'),
+              ),
             ],
           ),
         ],
