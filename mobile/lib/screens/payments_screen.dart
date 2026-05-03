@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
-import '../services/auth_service.dart';
-import 'package:provider/provider.dart';
 
 class PaymentsScreen extends StatefulWidget {
   const PaymentsScreen({super.key});
@@ -166,7 +164,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         labelStyle: const TextStyle(color: Colors.white38),
         prefixIcon: Icon(icon, color: Colors.white24),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.05),
+        fillColor: Colors.white.withValues(alpha: 0.05),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
         focusedBorder: OutlineInputBorder(

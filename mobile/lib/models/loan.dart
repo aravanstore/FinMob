@@ -17,6 +17,7 @@ class Loan {
   final double overdueInterest; // overdue_interest
   final double penaltyOd;       // accrued_penalty_od
   final double penaltyInt;      // accrued_penalty_int
+  final Map<String, dynamic>? board;
 
   const Loan({
     required this.id,
@@ -35,6 +36,7 @@ class Loan {
     this.overdueInterest = 0.0,
     this.penaltyOd = 0.0,
     this.penaltyInt = 0.0,
+    this.board,
   });
 
   factory Loan.fromJson(Map<String, dynamic> j) => Loan(
@@ -44,8 +46,8 @@ class Loan {
         principalBalance: _d(j['principal_balance']),
         accruedInterest:  _d(j['accrued_interest']),
         accruedPenalty:   _d(j['accrued_penalty']),
-        issueDate:        DateTime.parse(j['issue_date']),
-        endDate:          DateTime.parse(j['end_date']),
+        issueDate:        j['issue_date'] != null ? DateTime.parse(j['issue_date']) : DateTime.now(),
+        endDate:          j['end_date'] != null ? DateTime.parse(j['end_date']) : DateTime.now(),
         status:           j['status']?.toString() ?? '',
         calculatedStatus: j['calculated_status']?.toString() ?? j['status']?.toString() ?? '',
         purpose:          j['purpose']?.toString(),
@@ -54,6 +56,7 @@ class Loan {
         overdueInterest:  _d(j['overdue_interest']),
         penaltyOd:        _d(j['accrued_penalty_od']),
         penaltyInt:       _d(j['accrued_penalty_int']),
+        board:            j['board'],
       );
 
   static double _d(dynamic v) {

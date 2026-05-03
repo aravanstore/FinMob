@@ -18,7 +18,7 @@ const getPool = (req) => getTenantPool(req.client.dbName);
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/clients', auth, staffOnly, async (req, res) => {
   const search = (req.query.search || '').trim();
-  const limit  = Math.min(50, parseInt(req.query.limit || '20'));
+  const limit  = Math.min(5000, parseInt(req.query.limit || '1000'));
 
   // Если поиск пустой, просто возвращаем список последних клиентов
 
@@ -60,7 +60,7 @@ router.get('/clients', auth, staffOnly, async (req, res) => {
          c.status, 
          c.address_factual, 
          c.registration_date
-       ORDER BY c.full_name
+       ORDER BY c.full_name ASC
        LIMIT $2`,
       [`%${search}%`, limit]
     );

@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
+import '../../services/theme_controller.dart';
+import '../../theme/app_theme.dart';
 
 class _C {
-  static const bg       = Color(0xFF080E1A);
-  static const surface  = Color(0xFF0F1829);
-  static const card     = Color(0xFF141F33);
-  static const border   = Color(0xFF1E2D47);
-  static const accent   = Color(0xFF2563EB);
-  static const textPri  = Color(0xFFEFF6FF);
-  static const textSec  = Color(0xFF64748B);
+  static const gold     = Color(0xFFF59E0B);
   static const green    = Color(0xFF10B981);
   static const red      = Color(0xFFEF4444);
   static const orange   = Color(0xFFF97316);
+  static const accent   = Color(0xFF2563EB);
+  static const accentLt = Color(0xFF3B82F6);
 }
 
 class LoanDetailsScreen extends StatefulWidget {
@@ -37,16 +35,17 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     final fmt = NumberFormat('#,##0.00', 'ru_RU');
     final df  = DateFormat('dd.MM.yyyy');
 
     return Scaffold(
-      backgroundColor: _C.bg,
+      backgroundColor: pal.bg,
       appBar: AppBar(
-        backgroundColor: _C.bg,
+        backgroundColor: pal.bg,
         elevation: 0,
-        title: const Text('Детали кредита', style: TextStyle(color: _C.textPri, fontSize: 18, fontWeight: FontWeight.bold)),
-        iconTheme: const IconThemeData(color: _C.textPri),
+        title: Text('Детали кредита', style: TextStyle(color: pal.textPri, fontSize: 18, fontWeight: FontWeight.bold)),
+        iconTheme: IconThemeData(color: pal.textPri),
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _loanFuture,
@@ -55,17 +54,37 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
             return const Center(child: CircularProgressIndicator(color: _C.accent));
           }
           if (snap.hasError) {
-            return Center(child: Text('Ошибка: ${snap.error}', style: const TextStyle(color: _C.textSec)));
+            return Center(child: Text('Ошибка: ${snap.error}', style: TextStyle(color: pal.textSec)));
           }
 
           final loan     = snap.data!['loan'];
           final schedule = snap.data!['schedule'] as List<dynamic>;
           final payments = snap.data!['payments'] as List<dynamic>;
 
+
           final amount   = double.tryParse(loan['loan_amount']?.toString() ?? '0') ?? 0;
           final balance  = double.tryParse(loan['principal_balance']?.toString() ?? '0') ?? 0;
           final interest = double.tryParse(loan['accrued_interest']?.toString() ?? '0') ?? 0;
           final penalty  = double.tryParse(loan['accrued_penalty']?.toString() ?? '0') ?? 0;
+          
+          final overdueInt = double.tryParse(loan['overdue_interest']?.toString() ?? '0') ?? 0;
+          final interestRate = loan['interest_rate_annual'] ?? loan['interest_rate'] ?? '0';
+
+          final now = DateTime.now();
+          final eom = DateTime(now.year, now.month + 1, 0);
+
+          double overdueOd = 0;
+          double eomOd = 0;
+          double eomInt = overdueInt + interest;
+
+          for (var s in schedule) {
+            if (s['is_paid'] == true) continue;
+            final d = DateTime.tryParse(s['payment_date'].toString());
+            if (d == null) continue;
+            final pAmt = double.tryParse(s['principal_amount']?.toString() ?? '0') ?? 0;
+            if (d.isBefore(now)) overdueOd += pAmt;
+            if (d.isBefore(eom) || d.isAtSameMomentAs(eom)) eomOd += pAmt;
+          }
 
           return Column(
             children: [
@@ -74,13 +93,13 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [_C.surface, _C.card],
+                  gradient: LinearGradient(
+                    colors: [pal.surface, pal.card],
                     begin: Alignment.topLeft, end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _C.border),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 4))],
+                  border: Border.all(color: pal.border),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))],
                 ),
                 child: Column(
                   children: [
@@ -90,47 +109,64 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('№${loan['contract_number']}', style: const TextStyle(color: _C.textPri, fontSize: 20, fontWeight: FontWeight.bold)),
+                            Text('КД-${loan['contract_number']}', style: TextStyle(color: pal.textPri, fontSize: 20, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 4),
-                            Text(loan['full_name'] ?? '', style: const TextStyle(color: _C.textSec, fontSize: 13)),
+                            Text(loan['full_name'] ?? '', style: TextStyle(color: pal.textSec, fontSize: 13)),
                           ],
                         ),
                         _StatusBadge(status: loan['status']),
                       ],
                     ),
-                    const Divider(color: _C.border, height: 32),
-                    Row(
-                      children: [
-                        _AmountItem(label: 'Выдано', amount: fmt.format(amount), color: _C.textPri),
-                        const Spacer(),
-                        _AmountItem(label: 'Остаток', amount: fmt.format(balance), color: _C.green),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        _AmountItem(label: 'Проценты', amount: fmt.format(interest), color: _C.orange, small: true),
-                        const Spacer(),
-                        _AmountItem(label: 'Пеня', amount: fmt.format(penalty), color: _C.red, small: true),
-                      ],
+                    Divider(color: pal.border, height: 24),
+                    
+                    // Информационное табло как в AURUM
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: pal.bg.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: pal.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Информационное табло', style: TextStyle(color: pal.textSec, fontSize: 12, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(flex: 2, child: Text('НАИМЕНОВАНИЕ', style: TextStyle(color: pal.textHint, fontSize: 10))),
+                              Expanded(flex: 2, child: Text('ПРОСРОЧКА', textAlign: TextAlign.right, style: TextStyle(color: pal.textHint, fontSize: 10))),
+                              Expanded(flex: 2, child: Text('К КОНЦУ МЕС.', textAlign: TextAlign.right, style: TextStyle(color: pal.textHint, fontSize: 10))),
+                              Expanded(flex: 2, child: Text('ПОЛНОЕ', textAlign: TextAlign.right, style: TextStyle(color: pal.textHint, fontSize: 10))),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          _buildTableRow('ОД', overdueOd, eomOd, balance, fmt, pal),
+                          _buildTableRow('Проценты', overdueInt, eomInt, overdueInt + interest, fmt, pal),
+                          _buildTableRow('Пени', penalty, penalty, penalty, fmt, pal),
+                          Divider(color: pal.border, height: 16),
+                          _buildTableRow('ИТОГО', overdueOd + overdueInt + penalty, eomOd + eomInt + penalty, balance + overdueInt + interest + penalty, fmt, pal, isBold: true),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
 
-              // Информация о ставках и датах
+              // Подробности: Выдано, Срок и т.д.
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
-                    _InfoTile(label: 'Выдан', value: loan['issue_date'] != null ? df.format(DateTime.parse(loan['issue_date'])) : '-'),
+                    _InfoTile(label: 'Выдано', value: fmt.format(amount)),
                     const SizedBox(width: 12),
-                    _InfoTile(label: 'Срок до', value: loan['end_date'] != null ? df.format(DateTime.parse(loan['end_date'])) : '-'),
+                    _InfoTile(label: 'Окончание', value: loan['end_date'] != null ? df.format(DateTime.parse(loan['end_date'])) : '-'),
                     const SizedBox(width: 12),
-                    _InfoTile(label: 'Ставка', value: '${loan['interest_rate'] ?? '0'}%'),
+                    _InfoTile(label: 'Ставка', value: '$interestRate%'),
                   ],
                 ),
               ),
+
 
               const SizedBox(height: 16),
 
@@ -138,8 +174,8 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
               TabBar(
                 controller: _tabCtrl,
                 indicatorColor: _C.accent,
-                labelColor: _C.textPri,
-                unselectedLabelColor: _C.textSec,
+                labelColor: pal.textPri,
+                unselectedLabelColor: pal.textSec,
                 tabs: const [
                   Tab(text: 'График'),
                   Tab(text: 'Платежи'),
@@ -162,7 +198,28 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
     );
   }
 
+
+  Widget _buildTableRow(String label, double v1, double v2, double v3, NumberFormat fmt, AppPalette pal, {bool isBold = false}) {
+    final style = TextStyle(
+      color: isBold ? pal.textPri : pal.textSec, 
+      fontSize: 12, 
+      fontWeight: isBold ? FontWeight.bold : FontWeight.w500
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(flex: 2, child: Text(label, style: style)),
+          Expanded(flex: 2, child: Text(fmt.format(v1), textAlign: TextAlign.right, style: style.copyWith(color: v1 > 0 && label == 'ПРОСРОЧКА' ? Colors.redAccent : style.color))),
+          Expanded(flex: 2, child: Text(fmt.format(v2), textAlign: TextAlign.right, style: style)),
+          Expanded(flex: 2, child: Text(fmt.format(v3), textAlign: TextAlign.right, style: style.copyWith(color: isBold ? Colors.greenAccent : style.color))),
+        ],
+      ),
+    );
+  }
+
   Widget _buildScheduleList(List<dynamic> list, NumberFormat fmt, DateFormat df) {
+    final pal = AppPalette.of(context);
     if (list.isEmpty) return const _EmptyState(message: 'График не сформирован');
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -177,20 +234,20 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: _C.card,
+            color: pal.card,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isOverdue ? _C.red.withOpacity(0.3) : _C.border),
+            border: Border.all(color: isOverdue ? _C.red.withValues(alpha: 0.3) : pal.border),
           ),
           child: Row(
             children: [
-              Text('${item['payment_number']}', style: const TextStyle(color: _C.textSec, fontWeight: FontWeight.bold)),
+              Text('${item['payment_number']}', style: TextStyle(color: pal.textSec, fontWeight: FontWeight.bold)),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(df.format(date), style: TextStyle(color: isOverdue ? _C.red : _C.textPri, fontWeight: FontWeight.w600)),
-                    Text('Сумма: ${fmt.format(item['payment_amount'])}', style: const TextStyle(color: _C.textSec, fontSize: 11)),
+                    Text(df.format(date), style: TextStyle(color: isOverdue ? _C.red : pal.textPri, fontWeight: FontWeight.w600)),
+                    Text('Сумма: ${fmt.format(item['payment_amount'])}', style: TextStyle(color: pal.textSec, fontSize: 11)),
                   ],
                 ),
               ),
@@ -199,7 +256,7 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
               else if (isOverdue)
                 const Icon(Icons.warning_rounded, color: _C.red, size: 20)
               else
-                const Icon(Icons.schedule_rounded, color: _C.textSec, size: 20),
+                Icon(Icons.schedule_rounded, color: pal.textSec, size: 20),
             ],
           ),
         );
@@ -208,6 +265,7 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
   }
 
   Widget _buildPaymentsList(List<dynamic> list, NumberFormat fmt, DateFormat df) {
+    final pal = AppPalette.of(context);
     if (list.isEmpty) return const _EmptyState(message: 'Платежей еще не было');
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -218,9 +276,9 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: _C.card,
+            color: pal.card,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _C.border),
+            border: Border.all(color: pal.border),
           ),
           child: Row(
             children: [
@@ -230,8 +288,8 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('${fmt.format(double.parse(item['amount'].toString()))} сом', style: const TextStyle(color: _C.textPri, fontWeight: FontWeight.bold)),
-                    Text(df.format(DateTime.parse(item['transaction_date'])), style: const TextStyle(color: _C.textSec, fontSize: 11)),
+                    Text('${fmt.format(double.parse(item['amount'].toString()))} сом', style: TextStyle(color: pal.textPri, fontWeight: FontWeight.bold)),
+                    Text(df.format(DateTime.parse(item['transaction_date'])), style: TextStyle(color: pal.textSec, fontSize: 11)),
                   ],
                 ),
               ),
@@ -240,7 +298,7 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
                 flex: 1,
                 child: Text(
                   item['description'] ?? 'Пополнение', 
-                  style: const TextStyle(color: _C.textSec, fontSize: 10),
+                  style: TextStyle(color: pal.textSec, fontSize: 10),
                   textAlign: TextAlign.right,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -262,10 +320,11 @@ class _AmountItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: _C.textSec, fontSize: 11)),
+        Text(label, style: TextStyle(color: pal.textSec, fontSize: 11)),
         const SizedBox(height: 2),
         Text('$amount сом', style: TextStyle(color: color, fontSize: small ? 14 : 17, fontWeight: FontWeight.bold)),
       ],
@@ -279,10 +338,11 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     final color = status == 'Активен' ? _C.green : (status == 'Просрочен' ? _C.red : _C.orange);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: color.withOpacity(0.3))),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: color.withValues(alpha: 0.3))),
       child: Text(status ?? 'Неизвестно', style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
     );
   }
@@ -294,15 +354,16 @@ class _InfoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-        decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: _C.border)),
+        decoration: BoxDecoration(color: pal.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: pal.border)),
         child: Column(
           children: [
-            Text(label, style: const TextStyle(color: _C.textSec, fontSize: 10)),
+            Text(label, style: TextStyle(color: pal.textSec, fontSize: 10)),
             const SizedBox(height: 4),
-            Text(value, style: const TextStyle(color: _C.textPri, fontSize: 12, fontWeight: FontWeight.bold)),
+            Text(value, style: TextStyle(color: pal.textPri, fontSize: 12, fontWeight: FontWeight.bold)),
           ],
         ),
       ),
@@ -316,6 +377,7 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(child: Text(message, style: const TextStyle(color: _C.textSec, fontSize: 14)));
+    final pal = AppPalette.of(context);
+    return Center(child: Text(message, style: TextStyle(color: pal.textSec, fontSize: 14)));
   }
 }

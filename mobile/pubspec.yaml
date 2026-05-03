@@ -16,13 +16,16 @@ dependencies:
   dio: ^5.3.3
 
   # Хранение токена на устройстве
-  flutter_secure_storage: ^9.0.0
+  flutter_secure_storage: ^10.0.0
 
   # Навигация
   go_router: ^12.1.1
 
   # Состояние
   provider: ^6.1.1
+
+  # Filesystem paths
+  path_provider: ^2.1.5
 
   # QR-код
   qr_flutter: ^4.1.0
@@ -31,8 +34,9 @@ dependencies:
   cupertino_icons: ^1.0.2
 
   # Форматирование дат
-  intl: ^0.18.1
+  intl: ^0.20.2
   easy_localization: ^3.0.8
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:

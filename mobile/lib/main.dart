@@ -5,6 +5,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'services/auth_service.dart';
+import 'services/theme_controller.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/payments_screen.dart';
@@ -16,6 +17,7 @@ import 'screens/staff/client_details_screen.dart';
 import 'screens/staff/loan_details_screen.dart';
 import 'screens/staff/share_details_screen.dart';
 import 'screens/inquiry_screen.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,9 +33,12 @@ void main() async {
       fallbackLocale: const Locale('ru'),
       useOnlyLangCode: true,
       saveLocale: false,
-      child: ChangeNotifierProvider(
-        create: (_) => authService,
-        child: FinCoreApp(),
+      child: MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => authService),
+          ChangeNotifierProvider(create: (_) => ThemeController()),
+        ],
+        child: const FinCoreApp(),
       ),
     ),
   );
@@ -124,6 +129,8 @@ class _FinCoreAppState extends State<FinCoreApp> {
 
   @override
   Widget build(BuildContext context) {
+    final themeCtrl = context.watch<ThemeController>();
+
     return MaterialApp.router(
       title: 'FinCore',
       debugShowCheckedModeBanner: false,
@@ -135,13 +142,9 @@ class _FinCoreAppState extends State<FinCoreApp> {
       ],
       supportedLocales: context.supportedLocales,
       locale: context.locale,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1A56DB),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: themeCtrl.mode,
       routerConfig: _router,
     );
   }

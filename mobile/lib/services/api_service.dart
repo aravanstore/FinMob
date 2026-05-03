@@ -1,10 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// FinCore Mobile API base URL
-/// В продакшне замените на ваш Cloudflare Tunnel домен
-const _baseUrl = 'http://192.168.2.108:3002';
-
 class ApiService {
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
@@ -14,7 +10,7 @@ class ApiService {
   static const bool isProduction = false;
 
   static const String prodUrl = 'https://api.aravan.kg';
-  static const String devUrl = 'http://10.0.2.2:3002';
+  static const String devUrl = 'http://10.0.2.2:3002'; // FinMob backend (3001 = AURUM web)
 
   final _storage = const FlutterSecureStorage();
 
@@ -32,8 +28,11 @@ class ApiService {
         }
         return handler.next(options);
       },
-      onError: (DioException e, handler) {
-        // 401 — выбросим чтобы AuthService поймал и разлогинил
+      onError: (DioException e, handler) async {
+        if (e.response?.statusCode == 401) {
+          // Токен истёк или невалиден — чистим хранилище
+          await _storage.delete(key: 'jwt_token');
+        }
         return handler.next(e);
       },
     ));

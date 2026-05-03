@@ -1,13 +1,10 @@
 const router = require('express').Router();
 const auth   = require('../middleware/auth');
 const { getTenantPool } = require('../db/pool');
+const { getPaymentInfo } = require('../utils/paymentInfo');
 
-// Хелпер: получаем пул для текущего клиента из JWT
 const getPool = (req) => getTenantPool(req.client.dbName);
 
-// ─────────────────────────────────────────────────────────────────
-// GET /api/loans — все кредиты клиента
-// ─────────────────────────────────────────────────────────────────
 router.get('/', auth, async (req, res) => {
   try {
     const pool = getPool(req);
@@ -38,6 +35,16 @@ router.get('/', auth, async (req, res) => {
        ORDER BY l.issue_date DESC`,
       [req.client.clientId]
     );
+
+    for (let i = 0; i < rows.length; i++) {
+      try {
+        const info = await getPaymentInfo(pool, rows[i].loan_id);
+        console.log(`[DEBUG] Loan ${rows[i].loan_id} board successfully calculated!`);
+        rows[i].board = info;
+      } catch (e) {
+        console.error('[DEBUG] getPaymentInfo error for', rows[i].loan_id, e);
+      }
+    }
 
     res.json(rows);
   } catch (err) {

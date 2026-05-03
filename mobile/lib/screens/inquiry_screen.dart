@@ -17,7 +17,6 @@ class _InquiryScreenState extends State<InquiryScreen> {
   final _amountController = TextEditingController();
   final _purposeController = TextEditingController();
   final _dateController = TextEditingController();
-  DateTime? _selectedDate;
 
   String _selectedType = 'GENERAL';
   bool _isSubmitting = false;
@@ -60,7 +59,6 @@ class _InquiryScreenState extends State<InquiryScreen> {
     );
     if (picked != null) {
       setState(() {
-        _selectedDate = picked;
         _dateController.text = DateFormat('dd.MM.yyyy').format(picked);
       });
     }
@@ -152,7 +150,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DropdownButtonFormField<String>(
-            value: _selectedType,
+            initialValue: _selectedType,
             style: const TextStyle(color: Colors.black, fontSize: 16),
             dropdownColor: Colors.white,
             decoration: const InputDecoration(
@@ -313,7 +311,7 @@ class _InquiryScreenState extends State<InquiryScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.1),
+                      color: statusColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(

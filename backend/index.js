@@ -19,7 +19,10 @@ app.use((req, res, next) => {
 });
 
 // ─── Роуты ─────────────────────────────────────────────────────────────────
-app.use('/api/auth',     require('./routes/auth'));
+const authRouter = require('./routes/auth');
+app.use('/api/auth', authRouter);
+// Backward compatibility: some older mobile builds call /staff-login (without /api/auth)
+app.use('/', authRouter);
 app.use('/api/loans',    require('./routes/loans'));
 app.use('/api/shares',   require('./routes/shares'));
 app.use('/api/payments', require('./routes/payments'));

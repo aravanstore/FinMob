@@ -6,22 +6,17 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:intl/intl.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
+import '../../services/theme_controller.dart';
+import '../../theme/app_theme.dart';
 
 // ─── Цветовая палитра ────────────────────────────────────────────────────────
 class _C {
-  static const bg       = Color(0xFF080E1A);
-  static const surface  = Color(0xFF0F1829);
-  static const card     = Color(0xFF141F33);
-  static const border   = Color(0xFF1E2D47);
-  static const accent   = Color(0xFF2563EB);
-  static const accentLt = Color(0xFF3B82F6);
   static const gold     = Color(0xFFF59E0B);
   static const green    = Color(0xFF10B981);
   static const red      = Color(0xFFEF4444);
   static const orange   = Color(0xFFF97316);
-  static const textPri  = Color(0xFFEFF6FF);
-  static const textSec  = Color(0xFF64748B);
-  static const textHint = Color(0xFF334155);
+  static const accent   = Color(0xFF2563EB);
+  static const accentLt = Color(0xFF3B82F6);
 }
 
 class StaffDashboardScreen extends StatefulWidget {
@@ -90,6 +85,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     // ВАЖНО: Добавляем чтение locale, чтобы виджет перестраивался при смене языка
     final currentLocale = context.locale; 
     
@@ -99,7 +95,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        backgroundColor: _C.bg,
+        backgroundColor: pal.bg,
         appBar: _buildAppBar(auth),
         body: FadeTransition(
           opacity: _fadeAnim,
@@ -120,8 +116,9 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
 
   // ─── AppBar ────────────────────────────────────────────────────────────────
   PreferredSizeWidget _buildAppBar(AuthService auth) {
+    final pal = AppPalette.of(context);
     return AppBar(
-      backgroundColor: _C.bg,
+      backgroundColor: pal.bg,
       elevation: 0,
       systemOverlayStyle: SystemUiOverlayStyle.light,
       titleSpacing: 20,
@@ -145,8 +142,8 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
             children: [
               Text(
                 'staff.dashboard'.tr(),
-                style: const TextStyle(
-                  color: _C.textPri,
+                style: TextStyle(
+                  color: pal.textPri,
                   fontWeight: FontWeight.w700,
                   fontSize: 16,
                   letterSpacing: 0.2,
@@ -154,7 +151,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
               ),
               Text(
                 auth.fullName,
-                style: const TextStyle(color: _C.textSec, fontSize: 11),
+                style: TextStyle(color: pal.textSec, fontSize: 11),
               ),
             ],
           ),
@@ -165,12 +162,12 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
         Container(
           margin: const EdgeInsets.only(right: 8),
           decoration: BoxDecoration(
-            color: _C.surface,
+            color: pal.surface,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: _C.border),
+            border: Border.all(color: pal.border),
           ),
           child: IconButton(
-            icon: const Icon(Icons.logout_rounded, color: _C.textSec, size: 20),
+            icon: Icon(Icons.logout_rounded, color: pal.textSec, size: 20),
             onPressed: () async {
               final auth = context.read<AuthService>();
               await auth.logout();
@@ -184,10 +181,11 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
 
   // ─── Bottom Nav ────────────────────────────────────────────────────────────
   Widget _buildBottomNav() {
+    final pal = AppPalette.of(context);
     return Container(
       decoration: BoxDecoration(
-        color: _C.surface,
-        border: Border(top: BorderSide(color: _C.border, width: 1)),
+        color: pal.surface,
+        border: Border(top: BorderSide(color: pal.border, width: 1)),
       ),
       child: SafeArea(
         child: Padding(
@@ -210,9 +208,10 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
 
   // ─── HOME TAB ──────────────────────────────────────────────────────────────
   Widget _buildHomeTab(NumberFormat fmt) {
+    final pal = AppPalette.of(context);
     return RefreshIndicator(
       color: _C.accentLt,
-      backgroundColor: _C.card,
+      backgroundColor: pal.card,
       onRefresh: () async => setState(() => _statsFuture = _api.getDashboardStats()),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -303,19 +302,20 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
 
   // ─── SEARCH TAB ────────────────────────────────────────────────────────────
   Widget _buildSearchTab(NumberFormat fmt) {
+    final pal = AppPalette.of(context);
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          color: _C.bg,
+          color: pal.bg,
           child: Row(
             children: [
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: _C.surface,
+                    color: pal.surface,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: _C.border),
+                    border: Border.all(color: pal.border),
                   ),
                   child: TextFormField(
                     key: const Key('search_field_fixed'),
@@ -324,15 +324,15 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                     autofocus: true,
                     keyboardType: TextInputType.text,
                     textInputAction: TextInputAction.search,
-                    style: const TextStyle(
-                      color: _C.textPri, 
+                    style: TextStyle(
+                      color: pal.textPri, 
                       fontSize: 15,
                       fontFamily: 'sans-serif', // Системный шрифт
                     ),
                     decoration: InputDecoration(
                       hintText: 'staff.search_hint'.tr(),
-                      hintStyle: const TextStyle(color: _C.textHint, fontSize: 15),
-                      prefixIcon: const Icon(Icons.search_rounded, color: _C.textSec, size: 20),
+                      hintStyle: TextStyle(color: pal.textHint, fontSize: 15),
+                      prefixIcon: Icon(Icons.search_rounded, color: pal.textSec, size: 20),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
@@ -363,7 +363,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
 
         if (_isSearching)
           LinearProgressIndicator(
-            backgroundColor: _C.surface,
+            backgroundColor: pal.surface,
             color: _C.accentLt,
             minHeight: 2,
           ),
@@ -392,6 +392,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
 
   // ─── APPROVALS TAB ────────────────────────────────────────────────────────
   Widget _buildApprovalsTab(NumberFormat fmt) {
+    final pal = AppPalette.of(context);
     return FutureBuilder<List<dynamic>>(
       future: _approvalsFuture,
       builder: (context, snap) {
@@ -407,7 +408,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
 
         return RefreshIndicator(
           color: _C.accentLt,
-          backgroundColor: _C.card,
+          backgroundColor: pal.card,
           onRefresh: () async => setState(() => _approvalsFuture = _api.getApprovals()),
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -428,6 +429,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
 
   // ─── OVERDUE TAB ──────────────────────────────────────────────────────────
   Widget _buildOverdueTab(NumberFormat fmt) {
+    final pal = AppPalette.of(context);
     return FutureBuilder<List<dynamic>>(
       future: _overdueFuture,
       builder: (context, snap) {
@@ -443,7 +445,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
 
         return RefreshIndicator(
           color: _C.accentLt,
-          backgroundColor: _C.card,
+          backgroundColor: pal.card,
           onRefresh: () async => setState(() => _overdueFuture = _api.getOverdueLoans()),
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -470,31 +472,32 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
 class _LangButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     return Container(
       margin: const EdgeInsets.only(right: 8),
       decoration: BoxDecoration(
-        color: _C.surface,
+        color: pal.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _C.border),
+        border: Border.all(color: pal.border),
       ),
       child: PopupMenuButton<Locale>(
-        icon: const Icon(Icons.language_rounded, color: _C.textSec, size: 20),
-        color: _C.card,
+        icon: Icon(Icons.language_rounded, color: pal.textSec, size: 20),
+        color: pal.card,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: _C.border),
+          side: BorderSide(color: pal.border),
         ),
         onSelected: (locale) => EasyLocalization.of(context)!.setLocale(locale),
         itemBuilder: (_) => [
-          _langItem('RU', 'Русский',   const Locale('ru')),
-          _langItem('KY', 'Кыргызча', const Locale('ky')),
-          _langItem('EN', 'English',   const Locale('en')),
+          _langItem('RU', 'Русский',   const Locale('ru'), pal),
+          _langItem('KY', 'Кыргызча', const Locale('ky'), pal),
+          _langItem('EN', 'English',   const Locale('en'), pal),
         ],
       ),
     );
   }
 
-  PopupMenuItem<Locale> _langItem(String code, String label, Locale locale) {
+  PopupMenuItem<Locale> _langItem(String code, String label, Locale locale, AppPalette pal) {
     return PopupMenuItem(
       value: locale,
       child: Row(
@@ -502,14 +505,14 @@ class _LangButton extends StatelessWidget {
           Container(
             width: 32, height: 22,
             decoration: BoxDecoration(
-              color: _C.border,
+              color: pal.border,
               borderRadius: BorderRadius.circular(4),
             ),
             alignment: Alignment.center,
-            child: Text(code, style: const TextStyle(color: _C.textPri, fontSize: 11, fontWeight: FontWeight.bold)),
+            child: Text(code, style: TextStyle(color: pal.textPri, fontSize: 11, fontWeight: FontWeight.bold)),
           ),
           const SizedBox(width: 12),
-          Text(label, style: const TextStyle(color: _C.textPri)),
+          Text(label, style: TextStyle(color: pal.textPri)),
         ],
       ),
     );
@@ -527,6 +530,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     final active = index == current;
     return GestureDetector(
       onTap: () => onTap(index),
@@ -541,12 +545,12 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: active ? _C.accentLt : _C.textSec, size: 22),
+            Icon(icon, color: active ? _C.accentLt : pal.textSec, size: 22),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                color: active ? _C.accentLt : _C.textSec,
+                color: active ? _C.accentLt : pal.textSec,
                 fontSize: 10,
                 fontWeight: active ? FontWeight.w600 : FontWeight.normal,
               ),
@@ -561,6 +565,7 @@ class _NavItem extends StatelessWidget {
 class _WelcomeBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -606,11 +611,12 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     return Row(
       children: [
         Container(width: 3, height: 16, decoration: BoxDecoration(color: _C.accentLt, borderRadius: BorderRadius.circular(2))),
         const SizedBox(width: 10),
-        Text(title, style: const TextStyle(color: _C.textPri, fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 0.2)),
+        Text(title, style: TextStyle(color: pal.textPri, fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 0.2)),
       ],
     );
   }
@@ -624,12 +630,13 @@ class _BalanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _C.card,
+        color: pal.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _C.border),
+        border: Border.all(color: pal.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -644,9 +651,9 @@ class _BalanceCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text('$label ($code)', style: const TextStyle(color: _C.textSec, fontSize: 11)),
+          Text('$label ($code)', style: TextStyle(color: pal.textSec, fontSize: 11)),
           const SizedBox(height: 4),
-          Text('$amount сом', style: const TextStyle(color: _C.textPri, fontSize: 15, fontWeight: FontWeight.w700)),
+          Text('$amount сом', style: TextStyle(color: pal.textPri, fontSize: 15, fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -662,11 +669,12 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: _C.card,
+          color: pal.card,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: color.withOpacity(0.2)),
         ),
@@ -682,7 +690,7 @@ class _ActionCard extends StatelessWidget {
               child: Icon(icon, color: color, size: 26),
             ),
             const SizedBox(height: 10),
-            Text(label, style: const TextStyle(color: _C.textPri, fontWeight: FontWeight.w600, fontSize: 13), textAlign: TextAlign.center),
+            Text(label, style: TextStyle(color: pal.textPri, fontWeight: FontWeight.w600, fontSize: 13), textAlign: TextAlign.center),
           ],
         ),
       ),
@@ -698,6 +706,7 @@ class _ClientCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     final loans   = client['active_loans_count'] ?? 0;
     final balance = double.tryParse(client['total_balance']?.toString() ?? '0') ?? 0;
     final phone   = client['phone_main'] ?? '';
@@ -708,9 +717,9 @@ class _ClientCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: _C.card,
+          color: pal.card,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _C.border),
+          border: Border.all(color: pal.border),
         ),
         child: Row(
           children: [
@@ -732,9 +741,9 @@ class _ClientCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(client['full_name'] ?? 'Без имени',
-                      style: const TextStyle(color: _C.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                      style: TextStyle(color: pal.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
                   const SizedBox(height: 3),
-                  Text(phone, style: const TextStyle(color: _C.textSec, fontSize: 12)),
+                  Text(phone, style: TextStyle(color: pal.textSec, fontSize: 12)),
                   const SizedBox(height: 6),
                   Row(
                     children: [
@@ -747,7 +756,7 @@ class _ClientCard extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, color: _C.textHint, size: 20),
+            Icon(Icons.chevron_right_rounded, color: pal.textHint, size: 20),
           ],
         ),
       ),
@@ -763,6 +772,7 @@ class _ApprovalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     final amount = double.tryParse(item['loan_amount']?.toString() ?? '0') ?? 0;
     return GestureDetector(
       onTap: onTap,
@@ -770,7 +780,7 @@ class _ApprovalCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: _C.card,
+          color: pal.card,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: _C.orange.withOpacity(0.2)),
         ),
@@ -791,7 +801,7 @@ class _ApprovalCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(item['full_name'] ?? '',
-                      style: const TextStyle(color: _C.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                      style: TextStyle(color: pal.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
                   const SizedBox(height: 4),
                   Text('${item['purpose'] ?? 'Кредит'} · ${fmt.format(amount)} сом',
                       style: const TextStyle(color: _C.orange, fontSize: 12)),
@@ -814,6 +824,7 @@ class _OverdueCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     final debt = double.tryParse(item['principal_balance']?.toString() ?? '0') ?? 0;
     final days = item['days_overdue'] ?? 0;
     return GestureDetector(
@@ -822,7 +833,7 @@ class _OverdueCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: _C.card,
+          color: pal.card,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: _C.red.withOpacity(0.2)),
         ),
@@ -843,14 +854,14 @@ class _OverdueCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(item['full_name'] ?? '',
-                      style: const TextStyle(color: _C.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                      style: TextStyle(color: pal.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
                   const SizedBox(height: 4),
                   Text('${fmt.format(debt)} сом · $days дн.',
                       style: const TextStyle(color: _C.red, fontSize: 12)),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, color: _C.textHint, size: 20),
+            Icon(Icons.chevron_right_rounded, color: pal.textHint, size: 20),
           ],
         ),
       ),
@@ -865,6 +876,7 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -883,10 +895,11 @@ class _CardSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     return Container(
       height: height,
       decoration: BoxDecoration(
-        color: _C.card,
+        color: pal.card,
         borderRadius: BorderRadius.circular(16),
       ),
     );
@@ -899,6 +912,7 @@ class _ErrorTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -907,7 +921,7 @@ class _ErrorTile extends StatelessWidget {
           children: [
             const Icon(Icons.error_outline_rounded, color: _C.red, size: 40),
             const SizedBox(height: 12),
-            Text(message, style: const TextStyle(color: _C.textSec), textAlign: TextAlign.center),
+            Text(message, style: TextStyle(color: pal.textSec), textAlign: TextAlign.center),
           ],
         ),
       ),
@@ -922,13 +936,14 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: _C.textHint, size: 48),
+          Icon(icon, color: pal.textHint, size: 48),
           const SizedBox(height: 12),
-          Text(message, style: const TextStyle(color: _C.textSec, fontSize: 14)),
+          Text(message, style: TextStyle(color: pal.textSec, fontSize: 14)),
         ],
       ),
     );

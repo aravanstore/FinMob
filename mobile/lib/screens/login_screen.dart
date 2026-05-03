@@ -153,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         label: const Text('Заёмщик'),
                         selected: !_isStaff,
                         onSelected: (val) => setState(() => _isStaff = false),
-                        selectedColor: const Color(0xFF1A56DB).withOpacity(0.3),
+                        selectedColor: const Color(0xFF1A56DB).withValues(alpha: 0.3),
                         labelStyle: TextStyle(
                             color: !_isStaff ? Colors.white : Colors.white54),
                         backgroundColor: Colors.transparent,
@@ -165,7 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         label: const Text('Сотрудник'),
                         selected: _isStaff,
                         onSelected: (val) => setState(() => _isStaff = true),
-                        selectedColor: const Color(0xFF1A56DB).withOpacity(0.3),
+                        selectedColor: const Color(0xFF1A56DB).withValues(alpha: 0.3),
                         labelStyle: TextStyle(
                             color: _isStaff ? Colors.white : Colors.white54),
                         backgroundColor: Colors.transparent,
@@ -217,10 +217,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.15),
+                          color: Colors.red.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                              color: Colors.redAccent.withOpacity(0.4)),
+                              color: Colors.redAccent.withValues(alpha: 0.4)),
                         ),
                         child: Row(
                           children: [
@@ -290,7 +290,7 @@ class _LoginScreenState extends State<LoginScreen> {
         labelStyle: const TextStyle(color: Colors.white54),
         prefixIcon: Icon(icon, color: Colors.white38),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.07),
+        fillColor: Colors.white.withValues(alpha: 0.07),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
             borderSide: BorderSide.none),

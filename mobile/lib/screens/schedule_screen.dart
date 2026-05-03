@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../services/api_service.dart';
 import '../models/payment.dart';
@@ -81,7 +80,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E293B),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: color.withOpacity(0.25)),
+                  border: Border.all(color: color.withValues(alpha: 0.25)),
                 ),
                 child: Row(
                   children: [

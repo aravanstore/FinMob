@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/api_service.dart';
+import '../../services/theme_controller.dart';
+import '../../theme/app_theme.dart';
 
 class ClientDetailsScreen extends StatefulWidget {
   final String clientId;
@@ -23,27 +25,28 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
     final fmt = NumberFormat('#,##0.00', 'ru_RU');
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: pal.bg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
-        title: const Text('Профиль клиента',
-            style: TextStyle(color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: pal.bg,
+        title: Text('Профиль клиента',
+            style: TextStyle(color: pal.textPri)),
+        iconTheme: IconThemeData(color: pal.textPri),
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _detailsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-                child: CircularProgressIndicator(color: Color(0xFF1A56DB)));
+            return Center(
+                child: CircularProgressIndicator(color: pal.accent));
           }
           if (snapshot.hasError) {
             return Center(
                 child: Text('Ошибка: ${snapshot.error}',
-                    style: const TextStyle(color: Colors.white54)));
+                    style: TextStyle(color: pal.textSec)));
           }
 
           final data = snapshot.data!;
@@ -58,50 +61,46 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: pal.card,
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(client['full_name'] ?? 'Без имени',
-                        style: const TextStyle(
-                            color: Colors.white,
+                        style: TextStyle(
+                            color: pal.textPri,
                             fontSize: 20,
                             fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     _infoRow(Icons.phone, client['phone_main'] ?? '-'),
                     _infoRow(Icons.badge, 'ИНН: ${client['inn'] ?? '-'}'),
-                    _infoRow(
-                        Icons.location_on, client['address_factual'] ?? '-'),
+                    _infoRow(Icons.location_on, client['address_factual'] ?? '-'),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
 
               // Сводка
-              const Text('Сводка по кредитам',
+              Text('Сводка по кредитам',
                   style: TextStyle(
-                      color: Colors.white70,
+                      color: pal.textSec,
                       fontSize: 16,
                       fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  _summaryItem(
-                      'Всего', '${summary['total_loans']}', Colors.blue),
+                  _summaryItem('Всего', '${summary['total_loans']}', Colors.blue),
                   const SizedBox(width: 12),
-                  _summaryItem(
-                      'Активных', '${summary['active_loans']}', Colors.green),
+                  _summaryItem('Активных', '${summary['active_loans']}', Colors.green),
                   const SizedBox(width: 12),
-                  _summaryItem('Просрочено', '${summary['overdue_count']}',
-                      Colors.redAccent),
+                  _summaryItem('Просрочено', '${summary['overdue_count']}', Colors.redAccent),
                 ],
               ),
               const SizedBox(height: 16),
-              const Text('Паи и дивиденды',
+              Text('Паи и дивиденды',
                   style: TextStyle(
-                      color: Colors.white70,
+                      color: pal.textSec,
                       fontSize: 16,
                       fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
@@ -126,16 +125,16 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
               const SizedBox(height: 20),
 
               // Список кредитов
-              const Text('Кредиты',
+              Text('Кредиты',
                   style: TextStyle(
-                      color: Colors.white70,
+                      color: pal.textSec,
                       fontSize: 16,
                       fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               if (loans.isEmpty)
-                const Center(
+                Center(
                     child: Text('Кредитов не найдено',
-                        style: TextStyle(color: Colors.white38)))
+                        style: TextStyle(color: pal.textHint)))
               else
                 ...loans.map((l) => GestureDetector(
                   onTap: () => context.push('/staff/loan/${l['loan_id']}'),
@@ -149,21 +148,23 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
   }
 
   Widget _infoRow(IconData icon, String text) {
+    final pal = AppPalette.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: Colors.white38),
+          Icon(icon, size: 16, color: pal.textHint),
           const SizedBox(width: 8),
           Expanded(
               child: Text(text,
-                  style: const TextStyle(color: Colors.white70, fontSize: 14))),
+                  style: TextStyle(color: pal.textSec, fontSize: 14))),
         ],
       ),
     );
   }
 
   Widget _summaryItem(String label, String value, Color color) {
+    final pal = AppPalette.of(context);
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -178,7 +179,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                 style: TextStyle(
                     color: color, fontSize: 18, fontWeight: FontWeight.bold)),
             Text(label,
-                style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                style: TextStyle(color: pal.textHint, fontSize: 10)),
           ],
         ),
       ),
@@ -186,6 +187,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
   }
 
   Widget _loanTile(dynamic l, NumberFormat fmt) {
+    final pal = AppPalette.of(context);
     final status = l['calculated_status'] ?? l['status'];
     final color = status == 'Просрочен'
         ? Colors.redAccent
@@ -195,7 +197,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: pal.card,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withOpacity(0.2)),
       ),
@@ -206,8 +208,8 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('№${l['contract_number']}',
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold)),
+                  style: TextStyle(
+                      color: pal.textPri, fontWeight: FontWeight.bold)),
               Text(status,
                   style: TextStyle(
                       color: color, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -216,12 +218,12 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
           const SizedBox(height: 8),
           Text(
               '${fmt.format(double.parse(l['principal_balance'].toString()))} сом',
-              style: const TextStyle(
-                  color: Colors.white,
+              style: TextStyle(
+                  color: pal.textPri,
                   fontSize: 18,
                   fontWeight: FontWeight.bold)),
-          const Text('Остаток основного долга',
-              style: TextStyle(color: Colors.white38, fontSize: 11)),
+          Text('Остаток основного долга',
+              style: TextStyle(color: pal.textHint, fontSize: 11)),
         ],
       ),
     );
