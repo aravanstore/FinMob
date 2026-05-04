@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../services/auth_service.dart';
+import '../services/theme_controller.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -87,34 +88,49 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                children: [
-                  // Лого
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A56DB),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(Icons.account_balance_wallet_rounded,
-                        color: Colors.white, size: 44),
+          child: Stack(
+            children: [
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton(
+                  icon: Icon(
+                    context.watch<ThemeController>().isLight
+                        ? Icons.dark_mode_rounded
+                        : Icons.light_mode_rounded,
+                    color: Colors.white70,
                   ),
-                  const SizedBox(height: 20),
-                  const Text('FinCore',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 30,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2)),
-                  const SizedBox(height: 6),
-                  Text(_isStaff ? 'staff.dashboard'.tr() : 'login.title'.tr(),
-                      style:
-                          const TextStyle(color: Colors.white54, fontSize: 13)),
-                  const SizedBox(height: 20),
+                  onPressed: () => context.read<ThemeController>().toggle(),
+                ),
+              ),
+              Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      // Лого
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A56DB),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Icon(Icons.account_balance_wallet_rounded,
+                            color: Colors.white, size: 44),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text('FinCore',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 30,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2)),
+                      const SizedBox(height: 6),
+                      Text(_isStaff ? 'staff.dashboard'.tr() : 'login.title'.tr(),
+                          style:
+                              const TextStyle(color: Colors.white54, fontSize: 13)),
+                      const SizedBox(height: 20),
 
                   // Выбор языка
                   Row(
@@ -265,10 +281,12 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-        ),
+        ],
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 
   Widget _field({
     required TextEditingController ctrl,

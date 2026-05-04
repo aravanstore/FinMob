@@ -132,7 +132,7 @@ router.post('/staff-login', async (req, res) => {
         tenantName:  tenant.name,
       },
       process.env.JWT_SECRET,
-      { expiresIn: '12h' } // сотрудники — короткий токен
+      { expiresIn: '24h' } // сотрудники — 24 часа
     );
 
     res.json({

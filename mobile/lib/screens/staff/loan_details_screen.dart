@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
 import '../../services/theme_controller.dart';
@@ -36,7 +37,7 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
   @override
   Widget build(BuildContext context) {
     final pal = AppPalette.of(context);
-    final fmt = NumberFormat('#,##0.00', 'ru_RU');
+    final fmt = NumberFormat('#,##0', 'ru_RU');
     final df  = DateFormat('dd.MM.yyyy');
 
     return Scaffold(
@@ -46,6 +47,20 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
         elevation: 0,
         title: Text('Детали кредита', style: TextStyle(color: pal.textPri, fontSize: 18, fontWeight: FontWeight.bold)),
         iconTheme: IconThemeData(color: pal.textPri),
+        actions: [
+          IconButton(
+            tooltip: 'Тема',
+            icon: Icon(
+              context.watch<ThemeController>().isLight
+                  ? Icons.dark_mode_rounded
+                  : Icons.light_mode_rounded,
+              color: pal.textSec,
+              size: 22,
+            ),
+            onPressed: () => context.read<ThemeController>().toggle(),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _loanFuture,
@@ -57,34 +72,30 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
             return Center(child: Text('Ошибка: ${snap.error}', style: TextStyle(color: pal.textSec)));
           }
 
-          final loan     = snap.data!['loan'];
-          final schedule = snap.data!['schedule'] as List<dynamic>;
-          final payments = snap.data!['payments'] as List<dynamic>;
+          final loan     = snap.data!['loan'] as Map<String, dynamic>? ?? snap.data!;
+          final schedule = (snap.data!['schedule'] as List<dynamic>?) ?? [];
+          final payments = (snap.data!['payments'] as List<dynamic>?) ?? [];
+          final board    = loan['board'] as Map<String, dynamic>?;
 
+          final d = (String key) => double.tryParse((loan[key] ?? 0).toString()) ?? 0;
+          final b = (String key) => double.tryParse((board?[key] ?? 0).toString()) ?? 0;
 
-          final amount   = double.tryParse(loan['loan_amount']?.toString() ?? '0') ?? 0;
-          final balance  = double.tryParse(loan['principal_balance']?.toString() ?? '0') ?? 0;
-          final interest = double.tryParse(loan['accrued_interest']?.toString() ?? '0') ?? 0;
-          final penalty  = double.tryParse(loan['accrued_penalty']?.toString() ?? '0') ?? 0;
-          
-          final overdueInt = double.tryParse(loan['overdue_interest']?.toString() ?? '0') ?? 0;
+          final amount       = d('loan_amount');
+          final balance      = b('balance_od') > 0 ? b('balance_od') : d('principal_balance');
           final interestRate = loan['interest_rate_annual'] ?? loan['interest_rate'] ?? '0';
 
-          final now = DateTime.now();
-          final eom = DateTime(now.year, now.month + 1, 0);
+          // Берём данные из board (расчётные) если есть, иначе — из сырых полей
+          final overdueOd  = b('od_col1_overdue');
+          final eomOd      = b('od_col2_scheduled');
+          final fullOd     = b('od_col3_full') > 0 ? b('od_col3_full') : balance;
 
-          double overdueOd = 0;
-          double eomOd = 0;
-          double eomInt = overdueInt + interest;
+          final overdueInt = b('int_col1');
+          final eomInt     = b('int_col2');
+          final fullInt    = b('int_col3');
 
-          for (var s in schedule) {
-            if (s['is_paid'] == true) continue;
-            final d = DateTime.tryParse(s['payment_date'].toString());
-            if (d == null) continue;
-            final pAmt = double.tryParse(s['principal_amount']?.toString() ?? '0') ?? 0;
-            if (d.isBefore(now)) overdueOd += pAmt;
-            if (d.isBefore(eom) || d.isAtSameMomentAs(eom)) eomOd += pAmt;
-          }
+          final overduePen = b('pen_col1');
+          final eomPen     = b('pen_col2');
+          final fullPen    = b('pen_col3');
 
           return Column(
             children: [
@@ -141,11 +152,15 @@ class _LoanDetailsScreenState extends State<LoanDetailsScreen> with SingleTicker
                             ],
                           ),
                           const SizedBox(height: 8),
-                          _buildTableRow('ОД', overdueOd, eomOd, balance, fmt, pal),
-                          _buildTableRow('Проценты', overdueInt, eomInt, overdueInt + interest, fmt, pal),
-                          _buildTableRow('Пени', penalty, penalty, penalty, fmt, pal),
+                          _buildTableRow('ОД',        overdueOd,  eomOd,  fullOd,  fmt, pal),
+                          _buildTableRow('Проценты',  overdueInt, eomInt, fullInt, fmt, pal),
+                          _buildTableRow('Пени',      overduePen, eomPen, fullPen, fmt, pal),
                           Divider(color: pal.border, height: 16),
-                          _buildTableRow('ИТОГО', overdueOd + overdueInt + penalty, eomOd + eomInt + penalty, balance + overdueInt + interest + penalty, fmt, pal, isBold: true),
+                          _buildTableRow('ИТОГО',
+                            overdueOd + overdueInt + overduePen,
+                            eomOd + eomInt + eomPen,
+                            fullOd + fullInt + fullPen,
+                            fmt, pal, isBold: true),
                         ],
                       ),
                     ),

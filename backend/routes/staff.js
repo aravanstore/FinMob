@@ -1,6 +1,7 @@
 const router  = require('express').Router();
 const auth    = require('../middleware/auth');
 const { getTenantPool } = require('../db/pool');
+const { getPaymentInfo } = require('../utils/paymentInfo');
 
 // Middleware: только для сотрудников
 function staffOnly(req, res, next) {
@@ -180,6 +181,14 @@ router.get('/loans/:loanId', auth, staffOnly, async (req, res) => {
        ORDER BY transaction_date DESC, created_at DESC`,
       [req.params.loanId]
     );
+
+    // Добавляем расчётные данные (board) — как в AURUM
+    try {
+      const board = await getPaymentInfo(pool, loan.loan_id);
+      loan.board = board;
+    } catch (e) {
+      console.error('[staff/loans] getPaymentInfo error:', e.message);
+    }
 
     res.json({ loan, schedule, payments });
   } catch (err) {

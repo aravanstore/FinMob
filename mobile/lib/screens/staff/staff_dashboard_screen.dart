@@ -120,7 +120,9 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
     return AppBar(
       backgroundColor: pal.bg,
       elevation: 0,
-      systemOverlayStyle: SystemUiOverlayStyle.light,
+      systemOverlayStyle: Theme.of(context).brightness == Brightness.light 
+          ? SystemUiOverlayStyle.dark 
+          : SystemUiOverlayStyle.light,
       titleSpacing: 20,
       title: Row(
         children: [
@@ -137,30 +139,46 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
             child: const Icon(Icons.account_balance_rounded, color: Colors.white, size: 20),
           ),
           const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'staff.dashboard'.tr(),
-                style: TextStyle(
-                  color: pal.textPri,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                  letterSpacing: 0.2,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'staff.dashboard'.tr(),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: pal.textPri,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    letterSpacing: 0.2,
+                  ),
                 ),
-              ),
-              Text(
-                auth.fullName,
-                style: TextStyle(color: pal.textSec, fontSize: 11),
-              ),
-            ],
+                Text(
+                  auth.fullName,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: pal.textSec, fontSize: 11),
+                ),
+              ],
+            ),
           ),
         ],
       ),
       actions: [
+        IconButton(
+          tooltip: 'Тема',
+          icon: Icon(
+            context.watch<ThemeController>().isLight
+                ? Icons.dark_mode_rounded
+                : Icons.light_mode_rounded,
+            color: pal.textSec,
+            size: 22,
+          ),
+          onPressed: () => context.read<ThemeController>().toggle(),
+        ),
         _LangButton(),
         Container(
-          margin: const EdgeInsets.only(right: 8),
+          margin: const EdgeInsets.only(right: 12, left: 4),
           decoration: BoxDecoration(
             color: pal.surface,
             borderRadius: BorderRadius.circular(10),

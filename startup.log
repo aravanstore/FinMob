@@ -1,0 +1,16 @@
+[04.05.2026 20:45:03,83] Starting PM2 services... 
+[PM2] Spawning PM2 daemon with pm2_home=C:\Users\user\.pm2
+[PM2] PM2 Successfully daemonized
+[PM2] Resurrecting
+[PM2] Restoring processes located in C:\Users\user\.pm2\dump.pm2
+[PM2] Process c:\AURUM\server.js restored
+[PM2] Process C:\PROGRAM FILES\NODEJS\NPX.CMD restored
+[PM2] Process c:\Projects\FinMob\backend\index.js restored
+┌────┬───────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name              │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼───────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 0  │ aurum-server      │ default     │ 2.0.0   │ fork    │ 10192    │ 0s     │ 0    │ online    │ 0%       │ 0b       │ user     │ disabled │
+│ 1  │ aurum-ui          │ default     │ N/A     │ fork    │ 15076    │ 0s     │ 0    │ online    │ 0%       │ 0b       │ user     │ disabled │
+│ 2  │ finmob-backend    │ default     │ 1.0.0   │ fork    │ 11956    │ 0s     │ 0    │ online    │ 0%       │ 0b       │ user     │ disabled │
+└────┴───────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+[04.05.2026 20:45:19,03] PM2 resurrect done. 

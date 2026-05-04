@@ -82,7 +82,20 @@ router.get('/:loanId', auth, async (req, res) => {
       return res.status(404).json({ error: 'Кредит не найден' });
     }
 
-    res.json(rows[0]);
+    const loan = rows[0];
+
+    // Добавляем пересчитанные данные (board) так же, как в списке кредитов
+    try {
+      const board = await getPaymentInfo(pool, loan.loan_id);
+      loan.board = board;
+      // Перекрываем сырые поля правильными расчётными значениями
+      loan.overdue_interest = board.int_col1;
+      loan.accrued_penalty  = board.pen_col1;
+    } catch (e) {
+      console.error('[GET /api/loans/:loanId] getPaymentInfo error:', e.message);
+    }
+
+    res.json(loan);
   } catch (err) {
     console.error('[GET /api/loans/:loanId]', err);
     res.status(500).json({ error: 'Ошибка сервера' });

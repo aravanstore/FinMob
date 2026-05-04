@@ -10,10 +10,12 @@ class ApiService {
   static const bool isProduction = false;
 
   static const String prodUrl = 'https://api.aravan.kg';
-  static const String devUrl = 'http://10.0.2.2:3002'; // FinMob backend (3001 = AURUM web)
+  static const String devUrl = 'http://192.168.2.102:3002'; // FinMob backend (3001 = AURUM web)
 
   final _storage = const FlutterSecureStorage();
 
+  static Function()? onUnauthorized;
+  
   late final Dio _dio = Dio(BaseOptions(
     baseUrl: isProduction ? prodUrl : devUrl,
     connectTimeout: const Duration(seconds: 15),
@@ -30,8 +32,9 @@ class ApiService {
       },
       onError: (DioException e, handler) async {
         if (e.response?.statusCode == 401) {
-          // Токен истёк или невалиден — чистим хранилище
+          // Токен истёк или невалиден — чистим хранилище и уведомляем
           await _storage.delete(key: 'jwt_token');
+          onUnauthorized?.call();
         }
         return handler.next(e);
       },

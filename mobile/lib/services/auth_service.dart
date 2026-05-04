@@ -23,6 +23,10 @@ class AuthService extends ChangeNotifier {
   String get pgDatabase  => _pgDatabase;
 
   Future<void> init() async {
+    ApiService.onUnauthorized = () {
+      logout();
+    };
+
     final token = await _storage.read(key: 'jwt_token');
     if (token != null && token.isNotEmpty) {
       _role       = await _storage.read(key: 'role')        ?? 'client';

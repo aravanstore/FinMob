@@ -3,10 +3,20 @@ const getOpenOperationalDay = async (pool) => {
     const { rows } = await pool.query(
       `SELECT op_date FROM operational_days WHERE status = 'open' ORDER BY opened_at DESC NULLS LAST, op_date DESC LIMIT 1`
     );
-    if (!rows.length || !rows[0].op_date) return null;
+    if (!rows.length || !rows[0].op_date) {
+      // Если открытых дней нет, берем последний закрытый
+      const { rows: closedRows } = await pool.query(
+        `SELECT op_date FROM operational_days WHERE status = 'closed' ORDER BY op_date DESC LIMIT 1`
+      );
+      if (closedRows.length && closedRows[0].op_date) {
+        const d = new Date(closedRows[0].op_date);
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      }
+      return null;
+    }
     const d = new Date(rows[0].op_date);
-    if (isNaN(d.getTime())) return null;
-    return d.toISOString().slice(0, 10);
+    // Используем локальные компоненты даты, чтобы избежать сдвига из-за часового пояса
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   } catch (e) {
     console.error('getOpenOperationalDay error:', e);
     return null;
@@ -14,7 +24,8 @@ const getOpenOperationalDay = async (pool) => {
 };
 
 const getPaymentInfo = async (pool, loanId, targetDate = null) => {
-  const dateStr = targetDate || (await getOpenOperationalDay(pool)) || new Date().toISOString().slice(0, 10);
+  const opDateFromDb = await getOpenOperationalDay(pool);
+  const dateStr = targetDate || opDateFromDb || new Date().toISOString().slice(0, 10);
   const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
   const { rows: loanBalRows } = await pool.query(`SELECT * FROM loans WHERE loan_id::text = $1::text`, [loanId]);
@@ -121,15 +132,21 @@ const getPaymentInfo = async (pool, loanId, targetDate = null) => {
   const interestPaidOverall = Number(paidNowRows[0]?.int_paid || 0);
 
   const baselineDB = Number(l.overdue_interest || 0);
+  console.log(`[Calc DEBUG] loan_id: ${loanId}, baselineDB: ${baselineDB}, intBeforeThisMonth: ${intBeforeThisMonth}, interestPaidOverall: ${interestPaidOverall}`);
   let intRed = 0;
   if (scheduledOverdueInt > 0) {
       intRed = round2(scheduledOverdueInt);
+      console.log(`[Calc DEBUG] Using scheduledOverdueInt: ${intRed}`);
   } else {
       intRed = round2(Math.max(0, baselineDB + intBeforeThisMonth - interestPaidOverall));
+      console.log(`[Calc DEBUG] Calculated intRed via baseline: ${intRed}`);
       const { rows: firstSched } = await pool.query(
         `SELECT MIN(payment_date) as md FROM loan_schedules WHERE loan_id::text = $1::text`, [loanId]
       );
-      if (firstSched[0]?.md && new Date(firstSched[0].md) > opDateDt) intRed = 0;
+      if (firstSched[0]?.md && new Date(firstSched[0].md) > opDateDt) {
+          console.log(`[Calc DEBUG] First schedule in future (${firstSched[0].md} > ${dateStr}), resetting intRed to 0`);
+          intRed = 0;
+      }
   }
 
   const intToday = round2(Math.max(0, intWithinThisMonthToday - Math.max(0, interestPaidOverall - (scheduledOverdueInt > 0 ? scheduledOverdueInt : (baselineDB + intBeforeThisMonth)))));
@@ -225,32 +242,13 @@ const getPaymentInfo = async (pool, loanId, targetDate = null) => {
               penCursor = segEnd;
           }
       }
-      // Добавляем один день сверху вручную
-      livePenalty += (overduePrincipal + baselineDB) * ratePerDay * 1;
       livePenalty = round2(livePenalty);
   } else if (totalOverdueDays > 0) {
       const penaltyBaseAmount = overduePrincipal + (intRed > 0 ? intRed : 0);
       livePenalty = round2(penaltyBaseAmount * ratePerDay * totalOverdueDays);
-      
-      // Добавляем один день сверху вручную, как в процентах
-      const oneDayPenalty = round2(penaltyBaseAmount * ratePerDay * 1);
-      livePenalty += oneDayPenalty;
-  } else if (intRed > 0.01 || overduePrincipal > 0.01) {
-      // Даже если дней 0, но просрочка есть — начисляем за 1 день
-      const penaltyBaseAmount = overduePrincipal + (intRed > 0 ? intRed : 0);
-      livePenalty = round2(penaltyBaseAmount * ratePerDay * 1);
   }
 
   const basePenalty = Math.max(0, round2(baseAccruedPen + livePenalty - penaltyPaidOverall));
-
-  console.log(`[DEBUG] Final board for ${loanId}:`, {
-      date: dateStr,
-      overduePrincipal,
-      intRed,
-      basePenalty,
-      totalOverdueDays,
-      ratePerDay
-  });
 
   return {
     loan_id: loanId,
@@ -270,8 +268,9 @@ const getPaymentInfo = async (pool, loanId, targetDate = null) => {
     pen_col3: basePenalty,
     total_col1: round2(overduePrincipal + intRed + basePenalty),
     total_col2: round2(principalDueThisMonth + intRed + intEOM + basePenalty),
-    total_col3: round2(principalBalance + intRed + intToday + basePenalty)
   };
 };
+
+module.exports = { getPaymentInfo };
 
 module.exports = { getPaymentInfo };
