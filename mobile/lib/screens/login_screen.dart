@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:local_auth/local_auth.dart';
 import '../services/auth_service.dart';
 import '../services/theme_controller.dart';
 
@@ -19,6 +20,82 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
   bool _isStaff = false;
   String? _error;
+
+  final _localAuth = LocalAuthentication();
+  bool _hasBiometrics = false;
+  bool _hasSavedCredentials = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometrics();
+  }
+
+  Future<void> _checkBiometrics() async {
+    try {
+      final canCheck = await _localAuth.canCheckBiometrics;
+      final isSupported = await _localAuth.isDeviceSupported();
+      if (canCheck || isSupported) {
+        final creds = await context.read<AuthService>().getSavedCredentials();
+        if (creds != null && mounted) {
+          setState(() {
+            _hasBiometrics = true;
+            _hasSavedCredentials = true;
+            // Optionally, pre-fill db and phone fields
+            _dbCtrl.text = creds['db'] ?? '';
+            _phoneCtrl.text = creds['username'] ?? '';
+            _isStaff = creds['role'] == 'staff';
+          });
+        }
+      }
+    } catch (e) {
+      // Ignore if biometrics fail to initialize
+    }
+  }
+
+  Future<void> _biometricLogin() async {
+    try {
+      final authenticated = await _localAuth.authenticate(
+        localizedReason: 'Подтвердите личность для входа',
+      );
+
+      if (authenticated) {
+        final creds = await context.read<AuthService>().getSavedCredentials();
+        if (creds != null) {
+          setState(() {
+            _loading = true;
+            _error = null;
+          });
+
+          final db = creds['db']!;
+          final user = creds['username']!;
+          final pass = creds['password']!;
+          final isStaff = creds['role'] == 'staff';
+
+          try {
+            if (isStaff) {
+              await context.read<AuthService>().staffLogin(db, user, pass);
+            } else {
+              await context.read<AuthService>().login(db, user, pass);
+            }
+            if (mounted) {
+              context.go(isStaff ? '/staff' : '/dashboard');
+            }
+          } catch (e) {
+            if (mounted) {
+              setState(() => _error = 'Ошибка авторизации. Введите пароль вручную.');
+              setState(() => _hasSavedCredentials = false);
+            }
+            await context.read<AuthService>().clearSavedCredentials();
+          } finally {
+            if (mounted) setState(() => _loading = false);
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Ошибка биометрии');
+    }
+  }
 
   Future<void> _login() async {
     final db = _dbCtrl.text.trim();
@@ -253,29 +330,53 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
 
-                  // Кнопка Войти
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: _loading ? null : _login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1A56DB),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
-                        elevation: 0,
+                  // Кнопка Войти и Биометрия
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: _loading ? null : _login,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF1A56DB),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                              elevation: 0,
+                            ),
+                            child: _loading
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 2))
+                                : Text('login.button'.tr(),
+                                    style: const TextStyle(
+                                        fontSize: 16, fontWeight: FontWeight.w600)),
+                          ),
+                        ),
                       ),
-                      child: _loading
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2))
-                          : Text('login.button'.tr(),
-                              style: const TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.w600)),
-                    ),
+                      if (_hasBiometrics && _hasSavedCredentials) ...[
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          height: 52,
+                          width: 52,
+                          child: ElevatedButton(
+                            onPressed: _loading ? null : _biometricLogin,
+                            style: ElevatedButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              backgroundColor: Colors.white.withValues(alpha: 0.1),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                              elevation: 0,
+                            ),
+                            child: const Icon(Icons.fingerprint, size: 28),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),

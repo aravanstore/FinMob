@@ -54,6 +54,10 @@ class AuthService extends ChangeNotifier {
     await _storage.write(key: 'tenant_name',  value: client['tenantName'] ?? '');
     await _storage.write(key: 'pg_database',  value: pgDatabase);
 
+    await _storage.write(key: 'saved_username', value: phone);
+    await _storage.write(key: 'saved_password', value: pin);
+    await _storage.write(key: 'saved_role',     value: 'client');
+
     _isLoggedIn  = true;
     _role        = role;
     _clientId    = client['clientId'];
@@ -78,6 +82,10 @@ class AuthService extends ChangeNotifier {
     await _storage.write(key: 'tenant_name',  value: user['tenantName'] ?? '');
     await _storage.write(key: 'pg_database',  value: pgDatabase);
 
+    await _storage.write(key: 'saved_username', value: username);
+    await _storage.write(key: 'saved_password', value: password);
+    await _storage.write(key: 'saved_role',     value: 'staff');
+
     _isLoggedIn  = true;
     _role        = role;
     _clientId    = user['userId'];
@@ -88,8 +96,36 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> logout() async {
-    await _storage.deleteAll();
+  Future<Map<String, String>?> getSavedCredentials() async {
+    final db   = await _storage.read(key: 'pg_database');
+    final user = await _storage.read(key: 'saved_username');
+    final pass = await _storage.read(key: 'saved_password');
+    final r    = await _storage.read(key: 'saved_role');
+
+    if (db != null && user != null && pass != null && r != null) {
+      return {'db': db, 'username': user, 'password': pass, 'role': r};
+    }
+    return null;
+  }
+
+  Future<void> clearSavedCredentials() async {
+    await _storage.delete(key: 'saved_username');
+    await _storage.delete(key: 'saved_password');
+    await _storage.delete(key: 'saved_role');
+  }
+
+  Future<void> logout({bool clearCredentials = false}) async {
+    if (clearCredentials) {
+      await _storage.deleteAll();
+    } else {
+      await _storage.delete(key: 'jwt_token');
+      await _storage.delete(key: 'role');
+      await _storage.delete(key: 'client_id');
+      await _storage.delete(key: 'full_name');
+      await _storage.delete(key: 'phone');
+      await _storage.delete(key: 'tenant_name');
+      // Notice we keep pg_database, saved_username, saved_password, saved_role
+    }
     _isLoggedIn  = false;
     _role        = 'client';
     _clientId    = '';
