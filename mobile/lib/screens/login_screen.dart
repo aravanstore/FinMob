@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:dio/dio.dart';
 import '../services/auth_service.dart';
 import '../services/theme_controller.dart';
 import '../widgets/loan_calculator.dart';
@@ -50,7 +51,11 @@ class _LoginScreenState extends State<LoginScreen> {
         context.go(_isStaff ? '/staff' : '/dashboard');
       }
     } on Exception catch (e) {
-      setState(() => _error = 'Ошибка входа: ${e.toString()}');
+      if (e is DioException && e.response?.data != null && e.response?.data is Map) {
+        setState(() => _error = e.response!.data['error'] ?? 'Ошибка входа');
+      } else {
+        setState(() => _error = 'Ошибка входа: ${e.toString()}');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

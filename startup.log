@@ -46,3 +46,16 @@
 │ 2  │ finmob-backend    │ default     │ 1.0.0   │ fork    │ 14560    │ 0s     │ 0    │ online    │ 0%       │ 59.1mb   │ user     │ disabled │
 └────┴───────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
 [06.05.2026  7:15:29,42] PM2 resurrect done. 
+[06.05.2026 21:47:49,38] Starting PM2 services... 
+[PM2] Spawning PM2 daemon with pm2_home=C:\Users\user\.pm2
+[PM2] PM2 Successfully daemonized
+[PM2] Resurrecting
+[PM2] Restoring processes located in C:\Users\user\.pm2\dump.pm2
+[PM2][ERROR] Failed to read dump file in C:\Users\user\.pm2\dump.pm2
+[PM2] Restoring processes located in C:\Users\user\.pm2\dump.pm2.bak
+[PM2][ERROR] Failed to read dump file in C:\Users\user\.pm2\dump.pm2.bak
+[PM2][ERROR] No processes saved; DUMP file doesn't exist
+┌────┬───────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name      │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+└────┴───────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+[06.05.2026 21:48:00,78] PM2 resurrect done. 

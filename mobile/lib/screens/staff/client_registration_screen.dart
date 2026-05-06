@@ -11,9 +11,6 @@ import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_manager/platform_tags.dart';
-import 'package:nfc_manager/src/platform_tags/nfc_a.dart';
-import 'package:nfc_manager/src/platform_tags/iso_dep.dart';
-import 'package:nfc_manager/src/platform_tags/iso7816.dart';
 import 'bac_crypto.dart';
 
 class ClientRegistrationScreen extends StatefulWidget {
@@ -26,6 +23,7 @@ class _ClientRegistrationScreenState extends State<ClientRegistrationScreen> {
   final _api = ApiService();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  Uint8List? _nfcPhoto;
   final _fullNameCtrl = TextEditingController();
   final _innCtrl = TextEditingController();
   final _dobCtrl = TextEditingController();
@@ -64,8 +62,8 @@ class _ClientRegistrationScreenState extends State<ClientRegistrationScreen> {
     final Map<String, String> map = {
       'ZH': 'Ж', 'KH': 'Х', 'TS': 'Ц', 'CH': 'Ч', 'SH': 'Ш', 'SHCH': 'Щ', 'YU': 'Ю', 'YA': 'Я',
       'A': 'А', 'B': 'Б', 'V': 'В', 'G': 'Г', 'D': 'Д', 'E': 'Е', 'YO': 'Ё', 'Z': 'З', 'I': 'И', 'Y': 'Й',
-      'K': 'К', 'L': 'Л', 'M': 'М', 'N': 'Н', 'O': 'О', 'P': 'Р', 'R': 'Р', 'S': 'С', 'T': 'Т', 'U': 'У',
-      'F': 'Ф', 'E': 'Э', 'YU': 'Ю', 'YA': 'Я'
+      'K': 'К', 'L': 'Л', 'M': 'М', 'N': 'Н', 'O': 'О', 'P': 'П', 'R': 'Р', 'S': 'С', 'T': 'Т', 'U': 'У',
+      'F': 'Ф', 'YU': 'Ю', 'YA': 'Я'
     };
     String result = latinText.toUpperCase();
     map.forEach((key, value) { if (key.length > 1) result = result.replaceAll(key, value); });
@@ -102,18 +100,350 @@ class _ClientRegistrationScreenState extends State<ClientRegistrationScreen> {
     return "$cleanPNum$cd1$cleanDob$cd2$cleanExp$cd3";
   }
 
-  Future<void> _performBac(dynamic dynamicTech, String mrzInfo, String label) async {
+  Future<SecureSession> _performBac(dynamic tech, String mrzInfo) async {
     final crypto = BacCrypto.fromMrz(mrzInfo);
-    final rndIcc = await dynamicTech.transceive(data: Uint8List.fromList([0x00, 0x84, 0x00, 0x00, 0x08]));
-    if (rndIcc.length < 8) throw "Bad RND.ICC";
-    final rndIfd = Uint8List.fromList(List.generate(8, (_) => Random().nextInt(256)));
-    final kIfd = Uint8List.fromList(List.generate(16, (_) => Random().nextInt(256)));
-    final s = Uint8List.fromList([...rndIfd, ...rndIcc.sublist(0, 8), ...kIfd]);
-    final eIfd = crypto.encrypt3DES(crypto.kEnc, s);
-    final mIfd = crypto.computeMAC(crypto.kMac, eIfd);
-    final authRes = await dynamicTech.transceive(data: Uint8List.fromList([0x00, 0x82, 0x00, 0x00, 0x28, ...eIfd, ...mIfd]));
-    String resHex = authRes.map((e) => (e as int).toRadixString(16).padLeft(2, "0")).join("");
-    if (!resHex.endsWith("9000")) throw "Auth Failed: $resHex";
+
+    // GET CHALLENGE
+    final rndIcc = await tech.transceive(data: Uint8List.fromList([0x00, 0x84, 0x00, 0x00, 0x08]));
+    if (rndIcc.length < 10) throw "GET CHALLENGE failed: ${hexEncode(rndIcc)}";
+    final rndIccData = Uint8List.fromList(rndIcc.sublist(0, 8));
+
+    // Generate random
+    final rand = Random.secure();
+    final rndIfd = Uint8List.fromList(List.generate(8, (_) => rand.nextInt(256)));
+    final kIfd = Uint8List.fromList(List.generate(16, (_) => rand.nextInt(256)));
+
+    // S = RND.IFD || RND.ICC || K.IFD
+    final s = Uint8List.fromList([...rndIfd, ...rndIccData, ...kIfd]);
+
+    // E.IFD = 3DES-CBC(Kenc, S), M.IFD = MAC(Kmac, E.IFD)
+    final eIfd = desedeCbcEncrypt(crypto.kEnc, s);
+    final mIfd = computeMAC(crypto.kMac, eIfd);
+
+    // MUTUAL AUTHENTICATE (Lc=0x28, Le=0x28)
+    final authCmd = Uint8List.fromList([0x00, 0x82, 0x00, 0x00, 0x28, ...eIfd, ...mIfd, 0x28]);
+    final authRes = await tech.transceive(data: authCmd);
+
+    String resHex = hexEncode(authRes);
+    if (!resHex.endsWith("9000") || authRes.length < 42) {
+      throw "MUTUAL AUTH failed: $resHex";
+    }
+
+    // Decrypt response: E.ICC (32) + M.ICC (8) + 9000
+    final eIcc = Uint8List.fromList(authRes.sublist(0, 32));
+    final decrypted = desedeCbcDecrypt(crypto.kEnc, eIcc);
+    // decrypted = RND.ICC' || RND.IFD' || K.ICC
+    final kIcc = Uint8List.fromList(decrypted.sublist(16, 32));
+
+    return SecureSession.fromBac(
+      kIfd: kIfd, kIcc: kIcc, rndIfd: rndIfd, rndIcc: rndIccData,
+    );
+  }
+
+  Future<Uint8List?> _readFileSecure(dynamic tech, SecureSession session, List<int> fileId) async {
+    // SELECT FILE
+    final selApdu = session.wrapApdu(0x00, 0xA4, 0x02, 0x0C, data: Uint8List.fromList(fileId));
+    final selRes = await tech.transceive(data: selApdu);
+    final selData = session.unwrapResponse(selRes); 
+    
+    // В случае ошибки чип возвращает защищённый ответ (например, 99 02 6A 82 8E 08 ... 6A 82)
+    // unwrapResponse вернёт null для 6A82, но мы можем проверить хвост
+    String selHex = hexEncode(selRes);
+    if (!selHex.endsWith("9000")) {
+      // Даже если ошибка, unwrapResponse уже увеличил SSC (если MAC был верен).
+      throw "SELECT fail: ${selHex.substring(selHex.length >= 4 ? selHex.length - 4 : 0)}";
+    }
+
+    // READ BINARY in chunks
+    final allBytes = <int>[];
+    int offset = 0;
+    int? totalLen;
+
+    while (true) {
+      int hi = (offset >> 8) & 0xFF;
+      int lo = offset & 0xFF;
+      final readApdu = session.wrapApdu(0x00, 0xB0, hi, lo, le: 0x00);
+      final readRes = await tech.transceive(data: readApdu);
+
+      final data = session.unwrapResponse(readRes);
+      if (data == null || data.isEmpty) {
+        if (offset == 0) throw "READ fail: ${hexEncode(readRes)}";
+        break;
+      }
+
+      // Определяем общую длину из первого TLV заголовка
+      if (offset == 0 && data.length > 4) {
+        int pos = 1; // skip tag
+        int len = data[pos++];
+        if (len == 0x81) { totalLen = data[pos] + pos + 1; }
+        else if (len == 0x82) { totalLen = ((data[pos] << 8) | data[pos + 1]) + pos + 2; }
+        else { totalLen = len + pos; }
+      }
+
+      allBytes.addAll(data);
+      offset += data.length;
+
+      if (totalLen != null && allBytes.length >= totalLen) break;
+      if (data.length < 0x20) break; // short read = end of file
+    }
+
+    return allBytes.isNotEmpty ? Uint8List.fromList(allBytes) : null;
+  }
+
+  void _applyMrzData(MrzData mrz) {
+    setState(() {
+      if (mrz.surname.isNotEmpty) {
+        String latinName = '${mrz.surname} ${mrz.givenNames}';
+        // Только если ФИО ещё пустое или состоит из латиницы (чтобы не затереть кириллицу из OCR)
+        if (_fullNameCtrl.text.isEmpty || !RegExp(r'[А-Яа-я]').hasMatch(_fullNameCtrl.text)) {
+          _fullNameCtrl.text = _capitalizeWords(_transliterateToCyrillic(latinName));
+        }
+      }
+      if (mrz.documentNumber.isNotEmpty) _passNumberCtrl.text = mrz.documentNumber;
+      if (mrz.dateOfBirth.isNotEmpty) _dobCtrl.text = mrz.dateOfBirth;
+      if (mrz.dateOfExpiry.isNotEmpty) _passExpiryDateCtrl.text = mrz.dateOfExpiry;
+      if (mrz.sex.isNotEmpty) _gender = mrz.sex;
+      if (mrz.inn.isNotEmpty) _innCtrl.text = mrz.inn;
+    });
+  }
+
+  void _tryParseDg13(Uint8List dg13Data) {
+    try {
+      final nodes = parseTlv(dg13Data);
+      final allText = <String>[];
+      void extractStrings(List<TlvNode> list) {
+        for (var n in list) {
+          try {
+            final s = String.fromCharCodes(n.value).trim();
+            if (s.length > 2) allText.add(s);
+          } catch (_) {}
+          if (n.value.length > 4) extractStrings(parseTlv(n.value));
+        }
+      }
+      extractStrings(nodes);
+
+      for (var text in allText) {
+        // Кириллическое ФИО (приоритет над транслитерацией)
+        if (RegExp(r'[А-ЯЁа-яё]{2,}\s+[А-ЯЁа-яё]').hasMatch(text) && text.length < 100) {
+          setState(() => _fullNameCtrl.text = _capitalizeWords(text));
+        }
+        // Адрес
+        if ((text.contains('обл') || text.contains('р-н') || text.contains('ул') ||
+             text.contains('г.') || text.contains('с.') || text.contains('село')) && text.length < 200) {
+          setState(() {
+            if (_addressRegCtrl.text.isEmpty) _addressRegCtrl.text = text;
+          });
+        }
+        // ИНН (если не найден в MRZ)
+        if (_innCtrl.text.isEmpty) {
+          final innMatch = RegExp(r'[12]\d{13}').firstMatch(text);
+          if (innMatch != null) setState(() => _innCtrl.text = innMatch.group(0)!);
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _extractImage(Uint8List dg2) {
+    // Поиск JPEG (FF D8 FF)
+    for (int i = 0; i < dg2.length - 3; i++) {
+      if (dg2[i] == 0xFF && dg2[i+1] == 0xD8 && dg2[i+2] == 0xFF) {
+        setState(() => _nfcPhoto = dg2.sublist(i));
+        return;
+      }
+    }
+    // Поиск JPEG2000 (00 00 00 0C 6A 50 20 20)
+    for (int i = 0; i < dg2.length - 8; i++) {
+      if (dg2[i] == 0x00 && dg2[i+1] == 0x00 && dg2[i+2] == 0x00 && dg2[i+3] == 0x0C &&
+          dg2[i+4] == 0x6A && dg2[i+5] == 0x50 && dg2[i+6] == 0x20 && dg2[i+7] == 0x20) {
+        setState(() => _nfcPhoto = dg2.sublist(i));
+        return;
+      }
+    }
+  }
+
+  Future<void> _scanNfc() async {
+    String pNum = _passNumberCtrl.text.trim();
+    String dobRaw = _dobCtrl.text.trim();
+    String expRaw = _passExpiryDateCtrl.text.trim();
+    if (pNum.isEmpty || dobRaw.isEmpty || expRaw.isEmpty) {
+      bool? confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('Внимание'),
+        content: const Text('Номер паспорта и даты не заполнены.\nNFC (BAC) может не сработать.\n\nСначала сфотографируйте паспорт, затем NFC.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('ОТМЕНА')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('ВСЕ РАВНО')),
+        ],
+      ));
+      if (confirm != true) return;
+    }
+
+    bool isAvailable = await NfcManager.instance.isAvailable();
+    if (!isAvailable) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('NFC выключен'))); return; }
+
+    HapticFeedback.mediumImpact();
+    setState(() => _isLoading = true);
+
+    // Показать диалог "приложите карту"
+    final scanCtx = context;
+    showDialog(context: scanCtx, barrierDismissible: false, builder: (_) => AlertDialog(
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        const CircularProgressIndicator(),
+        const SizedBox(height: 20),
+        const Text('Приложите ID-карту\nк задней панели телефона', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        Text('⚠ Держите карту неподвижно\n    пока идёт чтение (~10 сек)', textAlign: TextAlign.center, style: TextStyle(color: Colors.red.shade700, fontSize: 14, fontWeight: FontWeight.w500)),
+      ]),
+    ));
+
+    Timer? timeout = Timer(const Duration(seconds: 90), () {
+      if (_isLoading && mounted) {
+        NfcManager.instance.stopSession();
+        setState(() => _isLoading = false);
+        Navigator.of(scanCtx, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Время NFC (90с) истекло.')));
+      }
+    });
+
+    try {
+      String passNumFix = pNum.toUpperCase();
+      if (passNumFix.length == 7 && RegExp(r'^\d+$').hasMatch(passNumFix)) passNumFix = "ID$passNumFix";
+      String dobYY = dobRaw.length == 10 ? dobRaw.substring(8, 10) + dobRaw.substring(3, 5) + dobRaw.substring(0, 2) : "";
+      String expYY = expRaw.length == 10 ? expRaw.substring(8, 10) + expRaw.substring(3, 5) + expRaw.substring(0, 2) : "";
+      String mrz1 = _getMrzInfo(passNumFix, dobYY, expYY);
+      String mrz2 = _getMrzInfo(passNumFix.replaceAll('ID', '') + "<<", dobYY, expYY);
+
+      await NfcManager.instance.startSession(
+        pollingOptions: {NfcPollingOption.iso14443, NfcPollingOption.iso15693},
+        onDiscovered: (NfcTag tag) async {
+        timeout?.cancel();
+        HapticFeedback.heavyImpact();
+        String log = "";
+        bool success = false;
+
+        try {
+          final tech = IsoDep.from(tag);
+          if (tech == null) throw "IsoDep недоступен";
+          final dynamic dynTech = tech;
+
+          // SELECT ePassport AID
+          final selectAid = await dynTech.transceive(data: Uint8List.fromList(
+            [0x00, 0xA4, 0x04, 0x0C, 0x07, 0xA0, 0x00, 0x00, 0x02, 0x47, 0x10, 0x01]));
+          if (!hexEncode(selectAid).endsWith("9000")) throw "SELECT AID failed";
+          log += "✅ ePassport найден\n";
+
+          // BAC — попытка с двумя вариантами ключей
+          SecureSession? session;
+          try {
+            session = await _performBac(dynTech, mrz1);
+            log += "🔓 BAC #1 — OK\n";
+          } catch (e1) {
+            log += "⚠ BAC#1: $e1\n";
+            try {
+              // Повторный SELECT AID (сброс состояния карты)
+              await dynTech.transceive(data: Uint8List.fromList(
+                [0x00, 0xA4, 0x04, 0x0C, 0x07, 0xA0, 0x00, 0x00, 0x02, 0x47, 0x10, 0x01]));
+              session = await _performBac(dynTech, mrz2);
+              log += "🔓 BAC #2 — OK\n";
+            } catch (e2) { log += "❌ BAC#2: $e2\n"; }
+          }
+
+          if (session != null) {
+            // Читаем DG1 (MRZ)
+            try {
+              final dg1 = await _readFileSecure(dynTech, session, [0x01, 0x01]);
+              if (dg1 != null) {
+                log += "📄 DG1: ${dg1.length} байт\n";
+                final nodes = parseTlv(dg1);
+                // Ищем tag 0x5F1F (MRZ data)
+                Uint8List? mrzBytes;
+                for (var n in nodes) {
+                  final found = n.find(0x5F1F);
+                  if (found != null) { mrzBytes = found.value; break; }
+                  // Fallback: ищем среди children
+                  for (var c in n.children) {
+                    if (c.tag == 0x5F1F) { mrzBytes = c.value; break; }
+                  }
+                  if (mrzBytes != null) break;
+                }
+
+                if (mrzBytes != null) {
+                  final mrz = parseMrz(mrzBytes);
+                  if (mrz != null) {
+                    log += "👤 ${mrz.fullNameLatin}\n";
+                    log += "📅 ДР: ${mrz.dateOfBirth}, Срок: ${mrz.dateOfExpiry}\n";
+                    if (mrz.inn.isNotEmpty) log += "🆔 ИНН: ${mrz.inn}\n";
+                    _applyMrzData(mrz);
+                    success = true;
+                  } else {
+                    log += "⚠ MRZ не распознан\n";
+                  }
+                } else {
+                  log += "⚠ Tag 5F1F не найден в DG1\n";
+                }
+              } else {
+                log += "⚠ DG1 пуст\n";
+              }
+            } catch (e) { log += "❌ DG1: $e\n"; }
+
+            // Читаем DG13 (доп. данные: кириллица, адрес)
+            try {
+              final dg13 = await _readFileSecure(dynTech, session, [0x01, 0x0D]);
+              if (dg13 != null && dg13.length > 4) {
+                log += "📄 DG13: ${dg13.length} байт\n";
+                _tryParseDg13(dg13);
+              }
+            } catch (e) { log += "ℹ DG13: $e\n"; }
+
+            // Читаем DG11 (доп. персональные данные)
+            try {
+              final dg11 = await _readFileSecure(dynTech, session, [0x01, 0x0B]);
+              if (dg11 != null && dg11.length > 4) {
+                log += "📄 DG11: ${dg11.length} байт\n";
+                _tryParseDg13(dg11); // тот же парсер
+              }
+            } catch (e) { log += "ℹ DG11: $e\n"; }
+            
+            // Читаем DG2 (Фотография лица)
+            try {
+              final dg2 = await _readFileSecure(dynTech, session, [0x01, 0x02]);
+              if (dg2 != null && dg2.length > 4) {
+                log += "🖼 DG2 (Фото): ${dg2.length} байт\n";
+                _extractImage(dg2);
+              }
+            } catch (e) { log += "ℹ DG2: $e\n"; }
+          }
+
+          // Закрываем сессию
+          NfcManager.instance.stopSession();
+        } catch (e) {
+          log += "❌ Ошибка: $e\n";
+          NfcManager.instance.stopSession();
+        }
+
+        if (mounted) {
+          setState(() => _isLoading = false);
+          Navigator.of(scanCtx, rootNavigator: true).pop(); // закрыть диалог ожидания
+          showDialog(context: context, builder: (_) => AlertDialog(
+            title: Text(success ? '✅ Данные считаны!' : '⚠ Результат NFC'),
+            content: SingleChildScrollView(child: Column(
+              mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (success) const Text('Поля формы заполнены данными с чипа.\nПроверьте и дополните.', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                Text(log, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+              ],
+            )),
+            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+          ));
+        }
+      });
+    } catch (e) {
+      timeout?.cancel();
+      if (mounted) {
+        setState(() => _isLoading = false);
+        Navigator.of(scanCtx, rootNavigator: true).pop();
+      }
+    }
   }
 
   Future<void> _scanPassport() async {
@@ -138,88 +468,6 @@ class _ClientRegistrationScreenState extends State<ClientRegistrationScreen> {
       await _parseDualPassportData(frontInput, backInput);
     } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e'))); }
     finally { if (mounted) setState(() => _isLoading = false); }
-  }
-
-  Future<void> _scanNfc() async {
-    String pNum = _passNumberCtrl.text.trim(); String dobRaw = _dobCtrl.text.trim(); String expRaw = _passExpiryDateCtrl.text.trim();
-    if (pNum.isEmpty || dobRaw.isEmpty || expRaw.isEmpty) {
-      bool? confirm = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
-        title: const Text('Внимание'),
-        content: const Text('Номер паспорта и даты не заполнены. NFC-сканирование (BAC) может не сработать. Продолжить?'),
-        actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('ОТМЕНА')), TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('ВСЕ РАВНО СКАН'))],
-      ));
-      if (confirm != true) return;
-    }
-    bool isAvailable = await NfcManager.instance.isAvailable();
-    if (!isAvailable) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('NFC выключен'))); return; }
-    HapticFeedback.mediumImpact(); setState(() => _isLoading = true);
-    Timer? timeoutTimer = Timer(const Duration(seconds: 40), () {
-      if (_isLoading && mounted) { NfcManager.instance.stopSession(); setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Время ожидания NFC (40с) истекло.'))); }
-    });
-    try {
-      String passNumFix = pNum.toUpperCase();
-      if (passNumFix.length == 7 && RegExp(r'^\d+$').hasMatch(passNumFix)) passNumFix = "ID" + passNumFix;
-      String dobYY = dobRaw.length == 10 ? dobRaw.substring(8,10) + dobRaw.substring(3,5) + dobRaw.substring(0,2) : "";
-      String expYY = expRaw.length == 10 ? expRaw.substring(8,10) + expRaw.substring(3,5) + expRaw.substring(0,2) : "";
-      String mrz1 = _getMrzInfo(passNumFix, dobYY, expYY);
-      String mrz2 = _getMrzInfo(passNumFix.replaceAll('ID', '') + "<<", dobYY, expYY);
-      String nfcKeyInfo = "BAC1: $mrz1\nBAC2: $mrz2";
-
-      await NfcManager.instance.startSession(onDiscovered: (NfcTag tag) async {
-        timeoutTimer.cancel(); HapticFeedback.heavyImpact();
-        String apduResponse = "Проверка..."; String log = "Номер: $passNumFix\n"; bool found = false;
-        try {
-          final tech = IsoDep.from(tag) ?? NfcA.from(tag);
-          if (tech != null) {
-            final dynamic dynamicTech = tech;
-            final apps = [{'name': 'ePassport', 'aid': [0xA0, 0x00, 0x00, 0x02, 0x47, 0x10, 0x01]}];
-            for (var app in apps) {
-              final List<int> aid = app['aid'] as List<int>;
-              try {
-                final selectRes = await dynamicTech.transceive(data: Uint8List.fromList([0x00, 0xA4, 0x04, 0x0C, aid.length, ...aid]));
-                String resHex = selectRes.map((e) => (e as int).toRadixString(16).padLeft(2, "0")).join("");
-                if (resHex.endsWith("9000")) {
-                  log += "\nВХОД: ${app['name']} ✅\n";
-                  try { await _performBac(dynamicTech, mrz1, "BAC 1"); log += "🔓 АВТОРИЗАЦИЯ УСПЕШНА (BAC 1)!\n";
-                  } catch (e1) {
-                    try { await _performBac(dynamicTech, mrz2, "BAC 2"); log += "🔓 АВТОРИЗАЦИЯ УСПЕШНА (BAC 2)!\n";
-                    } catch (e2) { log += "🔒 ОШИБКА BAC: Ключи не подошли.\n"; }
-                  }
-                  final targets = [{"name": "DG1 (ФИО)", "path": [0x01, 0x01]}, {"name": "DG13 (Адрес)", "path": [0x01, 0x0D]}];
-                  for (var dg in targets) {
-                    try {
-                      final List<int> p = dg["path"] as List<int>;
-                      final selFile = await dynamicTech.transceive(data: Uint8List.fromList([0x00, 0xA4, 0x02, 0x0C, 0x02, ...p]));
-                      String sHex = selFile.map((e) => (e as int).toRadixString(16).padLeft(2, "0")).join("");
-                      log += "-> ${dg["name"]}: ${sHex == "9000" ? "ОТКРЫТ ✅" : "ЗАМОК ($sHex)"}\n";
-                    } catch (e) {}
-                  }
-                  found = true; break;
-                }
-              } catch (e) { log += "Error: $e\n"; }
-            }
-            apduResponse = found ? "Результат:\n$log" : "Приложения не найдены.\n$log";
-          }
-        } catch (e) { apduResponse = "Ошибка: $e"; }
-
-        if (mounted) {
-          setState(() => _isLoading = false); NfcManager.instance.stopSession();
-          bool hasOpen = apduResponse.contains('ОТКРЫТ') || apduResponse.contains('УСПЕШНА');
-          showDialog(context: context, builder: (context) => AlertDialog(
-            title: Text(hasOpen ? '✅ ДОСТУП ПОЛУЧЕН!' : 'NFC Скан'),
-            content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Статус безопасности:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              Text(apduResponse, style: TextStyle(fontFamily: 'monospace', fontSize: 13, color: hasOpen ? Colors.green.shade900 : Colors.black87)),
-              const Divider(height: 30),
-              const Text('Ключи BAC:', style: TextStyle(fontWeight: FontWeight.bold)),
-              Text(nfcKeyInfo, style: const TextStyle(color: Colors.blue, fontFamily: 'monospace', fontSize: 11)),
-            ])),
-            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('ПОНЯТНО'))],
-          ));
-        }
-      });
-    } catch (e) { timeoutTimer.cancel(); if (mounted) setState(() => _isLoading = false); }
   }
 
   Future<void> _parseDualPassportData(InputImage front, InputImage back) async {
@@ -323,7 +571,17 @@ class _ClientRegistrationScreenState extends State<ClientRegistrationScreen> {
 
   Widget _buildHeader(AppPalette pal) {
     return Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: const Color(0xFF2563EB).withOpacity(0.1), borderRadius: BorderRadius.circular(16)), child: Column(children: [
-      const Icon(Icons.camera_alt, color: Color(0xFF2563EB), size: 40), const SizedBox(height: 12),
+      if (_nfcPhoto != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.memory(_nfcPhoto!, height: 120, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Text('Формат фото (JP2) не поддерживается нативно', style: TextStyle(fontSize: 12))),
+          ),
+        )
+      else
+        const Icon(Icons.camera_alt, color: Color(0xFF2563EB), size: 40),
+      const SizedBox(height: 12),
       const Text('Автозаполнение', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)), const SizedBox(height: 16),
       Row(children: [
         Expanded(child: ElevatedButton.icon(onPressed: _scanPassport, icon: const Icon(Icons.qr_code_scanner), label: const Text('Фото'))),
