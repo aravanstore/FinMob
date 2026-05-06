@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "132985607801",
+    "project_id": "finmob-c3ef3",
+    "storage_bucket": "finmob-c3ef3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:132985607801:android:e1d41a2dfe3015342666a8",
+        "android_client_info": {
+          "package_name": "com.example.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyApMqPPnLytUC1nHNBZJ2rgqkkedeAYfsU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

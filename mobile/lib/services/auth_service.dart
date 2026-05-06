@@ -1,10 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'api_service.dart';
+import 'push_notification_service.dart';
 
 class AuthService extends ChangeNotifier {
-  final _storage = const FlutterSecureStorage();
-  final _api     = ApiService();
+  final FlutterSecureStorage _storage;
+  final ApiService _api;
+
+  AuthService(this._api) : _storage = const FlutterSecureStorage();
 
   bool   _isLoggedIn  = false;
   String _role        = 'client'; // 'client' или 'staff'
@@ -27,14 +30,17 @@ class AuthService extends ChangeNotifier {
       logout();
     };
 
-    final token = await _storage.read(key: 'jwt_token');
+    // Один вызов вместо 7 — значительно быстрее на Android Keystore
+    final all = await _storage.readAll();
+    final token = all['jwt_token'];
     if (token != null && token.isNotEmpty) {
-      _role       = await _storage.read(key: 'role')        ?? 'client';
-      _clientId   = await _storage.read(key: 'client_id')   ?? '';
-      _fullName   = await _storage.read(key: 'full_name')   ?? '';
-      _phone      = await _storage.read(key: 'phone')        ?? '';
-      _tenantName = await _storage.read(key: 'tenant_name') ?? '';
-      _pgDatabase = await _storage.read(key: 'pg_database') ?? '';
+      _api.setToken(token); // Кэшируем сразу при старте
+      _role       = all['role']        ?? 'client';
+      _clientId   = all['client_id']   ?? '';
+      _fullName   = all['full_name']   ?? '';
+      _phone      = all['phone']       ?? '';
+      _tenantName = all['tenant_name'] ?? '';
+      _pgDatabase = all['pg_database'] ?? '';
       _isLoggedIn = true;
     }
     notifyListeners();
@@ -47,6 +53,7 @@ class AuthService extends ChangeNotifier {
     final client = data['client'] as Map<String, dynamic>;
 
     await _storage.write(key: 'jwt_token',    value: token);
+    _api.setToken(token); // Сразу обновляем кэш
     await _storage.write(key: 'role',         value: role);
     await _storage.write(key: 'client_id',    value: client['clientId']);
     await _storage.write(key: 'full_name',    value: client['fullName'] ?? '');
@@ -65,6 +72,10 @@ class AuthService extends ChangeNotifier {
     _phone       = client['phone']      ?? '';
     _tenantName  = client['tenantName'] ?? '';
     _pgDatabase  = pgDatabase;
+    
+    // Регистрируем токен пушей
+    await PushNotificationService.registerToken(_api);
+    
     notifyListeners();
   }
 
@@ -75,10 +86,11 @@ class AuthService extends ChangeNotifier {
     final user   = data['user'] as Map<String, dynamic>;
 
     await _storage.write(key: 'jwt_token',    value: token);
+    _api.setToken(token); // Сразу обновляем кэш
     await _storage.write(key: 'role',         value: role);
-    await _storage.write(key: 'client_id',    value: user['userId']); // using client_id key for backwards compat
+    await _storage.write(key: 'client_id',    value: user['userId']);
     await _storage.write(key: 'full_name',    value: user['fullName'] ?? '');
-    await _storage.write(key: 'phone',        value: user['username'] ?? ''); // storing username in phone for now
+    await _storage.write(key: 'phone',        value: user['username'] ?? '');
     await _storage.write(key: 'tenant_name',  value: user['tenantName'] ?? '');
     await _storage.write(key: 'pg_database',  value: pgDatabase);
 
@@ -93,6 +105,10 @@ class AuthService extends ChangeNotifier {
     _phone       = user['username']   ?? '';
     _tenantName  = user['tenantName'] ?? '';
     _pgDatabase  = pgDatabase;
+    
+    // Регистрируем токен пушей
+    await PushNotificationService.registerToken(_api);
+    
     notifyListeners();
   }
 
@@ -119,6 +135,7 @@ class AuthService extends ChangeNotifier {
       await _storage.deleteAll();
     } else {
       await _storage.delete(key: 'jwt_token');
+      _api.setToken(null); // Сбрасываем кэш при выходе
       await _storage.delete(key: 'role');
       await _storage.delete(key: 'client_id');
       await _storage.delete(key: 'full_name');
@@ -133,6 +150,10 @@ class AuthService extends ChangeNotifier {
     _phone       = '';
     _tenantName  = '';
     _pgDatabase  = '';
+    
+    // Удаляем токен пушей
+    await PushNotificationService.unregisterToken(_api);
+    
     notifyListeners();
   }
 }

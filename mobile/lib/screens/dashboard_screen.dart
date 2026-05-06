@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../models/loan.dart';
 import '../services/theme_controller.dart';
 import '../theme/app_theme.dart';
+import '../widgets/loan_calculator.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -211,6 +212,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     return const SizedBox.shrink();
                   },
                 ),
+                const SizedBox(height: 16),
+                _CalculatorSection(),
                 const SizedBox(height: 20),
                 Text('client.active_loans'.tr(),
                     style: TextStyle(
@@ -583,6 +586,64 @@ class _ContactSection extends StatelessWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             child: const Text('Связаться', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalculatorSection extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1A56DB), Color(0xFF3B82F6)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: Theme.of(context).brightness == Brightness.light
+            ? [
+                BoxShadow(
+                  color: pal.accent.withValues(alpha: 0.20),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ]
+            : null,
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.calculate, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Кредитный калькулятор', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                Text('Рассчитайте новый займ', style: TextStyle(color: Colors.white70, fontSize: 11)),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => LoanCalculator.show(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Открыть', style: TextStyle(color: Color(0xFF1A56DB), fontSize: 12, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

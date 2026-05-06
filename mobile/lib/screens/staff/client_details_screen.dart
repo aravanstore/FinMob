@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../services/api_service.dart';
 import '../../services/theme_controller.dart';
 import '../../theme/app_theme.dart';
@@ -32,16 +33,14 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
       backgroundColor: pal.bg,
       appBar: AppBar(
         backgroundColor: pal.bg,
-        title: Text('Профиль клиента',
-            style: TextStyle(color: pal.textPri)),
+        title: Text('Профиль клиента', style: TextStyle(color: pal.textPri)),
         iconTheme: IconThemeData(color: pal.textPri),
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _detailsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(
-                child: CircularProgressIndicator(color: pal.accent));
+            return Center(child: CircularProgressIndicator(color: pal.accent));
           }
           if (snapshot.hasError) {
             return Center(
@@ -75,7 +74,8 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                     const SizedBox(height: 8),
                     _infoRow(Icons.phone, client['phone_main'] ?? '-'),
                     _infoRow(Icons.badge, 'ИНН: ${client['inn'] ?? '-'}'),
-                    _infoRow(Icons.location_on, client['address_factual'] ?? '-'),
+                    _infoRow(
+                        Icons.location_on, client['address_factual'] ?? '-'),
                   ],
                 ),
               ),
@@ -90,11 +90,14 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  _summaryItem('Всего', '${summary['total_loans']}', Colors.blue),
+                  _summaryItem(
+                      'Всего', '${summary['total_loans']}', Colors.blue),
                   const SizedBox(width: 12),
-                  _summaryItem('Активных', '${summary['active_loans']}', Colors.green),
+                  _summaryItem(
+                      'Активных', '${summary['active_loans']}', Colors.green),
                   const SizedBox(width: 12),
-                  _summaryItem('Просрочено', '${summary['overdue_count']}', Colors.redAccent),
+                  _summaryItem('Просрочено', '${summary['overdue_count']}',
+                      Colors.redAccent),
                 ],
               ),
               const SizedBox(height: 16),
@@ -105,7 +108,9 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                       fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               GestureDetector(
-                onTap: () => context.push('/staff/client/${widget.clientId}/shares', extra: {'name': client['full_name']}),
+                onTap: () => context.push(
+                    '/staff/client/${widget.clientId}/shares',
+                    extra: {'name': client['full_name']}),
                 child: Row(
                   children: [
                     _summaryItem(
@@ -137,14 +142,91 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                         style: TextStyle(color: pal.textHint)))
               else
                 ...loans.map((l) => GestureDetector(
-                  onTap: () => context.push('/staff/loan/${l['loan_id']}'),
-                  child: _loanTile(l, fmt),
-                )).toList(),
+                      onTap: () => context.push('/staff/loan/${l['loan_id']}'),
+                      child: _loanTile(l, fmt),
+                    )),
             ],
           );
         },
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _logVisit,
+        backgroundColor: const Color(0xFF2563EB),
+        icon: const Icon(Icons.add_location_alt, color: Colors.white),
+        label: const Text('Отметить визит', style: TextStyle(color: Colors.white)),
+      ),
     );
+  }
+
+  Future<void> _logVisit() async {
+    final pal = AppPalette.of(context);
+    final ctrl = TextEditingController();
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: pal.bg,
+        title: Text('Отметка визита', style: TextStyle(color: pal.textPri)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Ваши текущие GPS-координаты будут прикреплены к отчету автоматически.', style: TextStyle(color: pal.textSec, fontSize: 13)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: ctrl,
+              style: TextStyle(color: pal.textPri),
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Результат встречи / комментарий',
+                hintStyle: TextStyle(color: pal.textHint),
+                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: pal.border)),
+                focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF2563EB))),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true), 
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB)),
+            child: const Text('Сохранить', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (res != true) return;
+
+    // GPS Loading Dialog
+    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) throw Exception('GPS выключен. Включите геолокацию.');
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) throw Exception('Доступ к геолокации запрещен.');
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception('Доступ к геолокации запрещен навсегда. Разрешите в настройках.');
+      }
+
+      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      
+      await _api.logVisit(int.parse(widget.clientId), position.latitude, position.longitude, ctrl.text);
+      
+      if (mounted) {
+        Navigator.pop(context); // close loader
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Визит успешно сохранен'), backgroundColor: Colors.green));
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // close loader
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: Colors.red));
+      }
+    }
   }
 
   Widget _infoRow(IconData icon, String text) {
@@ -178,8 +260,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
             Text(value,
                 style: TextStyle(
                     color: color, fontSize: 18, fontWeight: FontWeight.bold)),
-            Text(label,
-                style: TextStyle(color: pal.textHint, fontSize: 10)),
+            Text(label, style: TextStyle(color: pal.textHint, fontSize: 10)),
           ],
         ),
       ),

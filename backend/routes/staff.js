@@ -2,6 +2,8 @@ const router  = require('express').Router();
 const auth    = require('../middleware/auth');
 const { getTenantPool } = require('../db/pool');
 const { getPaymentInfo } = require('../utils/paymentInfo');
+const { encryptData, getBlindIndex } = require('../utils/crypto');
+const { decryptData } = require('../utils/crypto');
 
 // Middleware: только для сотрудников
 function staffOnly(req, res, next) {
@@ -14,62 +16,157 @@ function staffOnly(req, res, next) {
 const getPool = (req) => getTenantPool(req.client.dbName);
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /api/staff/clients — создание нового клиента сотрудником
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/clients', auth, staffOnly, async (req, res) => {
+  try {
+    const pool = getPool(req);
+    const data = req.body;
+
+    const fioEnc = encryptData(data.full_name);
+    const innEnc = encryptData(data.inn);
+    const fioBindex = getBlindIndex(data.full_name);
+    const innBindex = getBlindIndex(data.inn);
+
+    const query = `
+      INSERT INTO clients (
+        full_name, inn, status, registration_date, client_type,
+        gender, date_of_birth, passport_series, passport_number,
+        passport_issued_by, passport_issued_date, passport_expiry_date,
+        citizenship, address_registration, rural_office, address_factual,
+        phone_main, phone_extra, email, workplace, position,
+        experience_months, monthly_income, family_status, spouse_name,
+        dependents, related_person, uku_sheet, ukz_sheet, notes,
+        fio_encrypted, inn_encrypted, fio_bindex, inn_bindex
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 
+        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
+        $31, $32, $33, $34
+      ) RETURNING client_id
+    `;
+
+    const values = [
+      data.full_name, 
+      data.inn, 
+      data.status || 'Активен', 
+      data.registration_date || new Date(), 
+      data.client_type || 'Физ. лицо',
+      data.gender, 
+      data.date_of_birth, 
+      data.passport_series, 
+      data.passport_number,
+      data.passport_issued_by, 
+      data.passport_issued_date, 
+      data.passport_expiry_date,
+      data.citizenship || 'Кыргызстан', 
+      data.address_registration, 
+      data.rural_office, 
+      data.address_factual,
+      data.phone_main, 
+      data.phone_extra, 
+      data.email, 
+      data.workplace, 
+      data.position,
+      data.experience_months || 0, 
+      data.monthly_income || 0, 
+      data.family_status, 
+      data.spouse_name,
+      data.dependents || 0, 
+      data.related_person || 'Нет', 
+      data.uku_sheet, 
+      data.ukz_sheet, 
+      data.notes,
+      fioEnc, 
+      innEnc, 
+      fioBindex, 
+      innBindex
+    ];
+
+    const { rows } = await pool.query(query, values);
+    res.json({ success: true, clientId: rows[0].client_id });
+  } catch (err) {
+    console.error('[POST /api/staff/clients]', err);
+    res.status(500).json({ error: 'Ошибка создания клиента: ' + err.message });
+  }
+});
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/staff/clients?search=ФИО_или_ИНН_или_телефон
 // Поиск клиентов (на выезде, в центре одобрений)
+// FIX: добавлен statement_timeout=8s чтобы не держать соединение вечно
+//      (именно зависший запрос вызывал ANR "FinCore isn't responding")
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/clients', auth, staffOnly, async (req, res) => {
   const search = (req.query.search || '').trim();
-  const limit  = Math.min(5000, parseInt(req.query.limit || '1000'));
+  const limit = Math.min(50, parseInt(req.query.limit || '30'));
 
-  // Если поиск пустой, просто возвращаем список последних клиентов
+  // Общий timeout на весь HTTP-запрос: 10 секунд
+  // Если бэкенд не ответил — клиент получает ошибку, а не зависает
+  res.setTimeout(10000, () => {
+    if (!res.headersSent) {
+      res.status(504).json({ error: 'Превышено время ожидания. Попробуйте ещё раз.' });
+    }
+  });
+
+  const pool = getPool(req);
+  let client;
 
   try {
-    const pool = getPool(req);
-    const { rows } = await pool.query(
-      `SELECT
-         c.client_id,
-         c.full_name,
-         c.phone_main,
-         c.phone_extra,
-         c.inn,
-         c.status,
-         c.address_factual,
-         c.registration_date,
-         COUNT(l.loan_id) FILTER (
-           WHERE l.status NOT IN ('Погашен','Закрыт')
-           AND (l.is_deleted = FALSE OR l.is_deleted IS NULL)
-         ) AS active_loans_count,
-         COALESCE(SUM(l.principal_balance) FILTER (
-           WHERE l.status NOT IN ('Погашен','Закрыт')
-           AND (l.is_deleted = FALSE OR l.is_deleted IS NULL)
-         ), 0) AS total_balance
-       FROM clients c
-       LEFT JOIN loans l ON l.client_id = c.client_id
-       WHERE (c.is_deleted = FALSE OR c.is_deleted IS NULL)
-         AND (
-           $1::text = '%%'
-           OR c.full_name ILIKE $1
-           OR c.phone_main ILIKE $1
-           OR c.inn::text ILIKE $1
-         )
-       GROUP BY 
-         c.client_id, 
-         c.full_name, 
-         c.phone_main, 
-         c.phone_extra, 
-         c.inn, 
-         c.status, 
-         c.address_factual, 
-         c.registration_date
-       ORDER BY c.full_name ASC
-       LIMIT $2`,
-      [`%${search}%`, limit]
-    );
+    client = await pool.connect();
+    const qRaw = search.toLowerCase();
 
-    res.json(rows);
+    // Устанавливаем statement_timeout именно для этого соединения
+    await client.query(`SET LOCAL statement_timeout = '8000'`);
+
+    const SELECT = `SELECT client_id, fio_encrypted, inn_encrypted, full_name, inn, legal_name, phone_main, client_type`;
+
+    const toDto = (r) => ({
+      client_id: r.client_id,
+      full_name: decryptData(r.fio_encrypted) || r.full_name || 'Без имени',
+      inn: decryptData(r.inn_encrypted) || r.inn || '-',
+      phone_main: r.phone_main || '',
+      legal_name: r.legal_name || '',
+      client_type: r.client_type || 'individual',
+    });
+
+    let resultRows = [];
+
+    if (!qRaw) {
+      const { rows } = await client.query(
+        `${SELECT} FROM clients 
+         WHERE (is_deleted = FALSE OR is_deleted IS NULL) 
+         ORDER BY created_at DESC 
+         LIMIT $1`,
+        [limit]
+      );
+      resultRows = rows;
+    } else {
+      // Быстрый поиск: слепой индекс + ИНН + телефон
+      const qBlind = getBlindIndex(search);
+      const { rows } = await client.query(
+        `${SELECT} FROM clients
+         WHERE (is_deleted = FALSE OR is_deleted IS NULL)
+           AND (fio_bindex = $1 OR inn_bindex = $1 OR full_name ILIKE $2 OR inn ILIKE $2 OR phone_main ILIKE $2)
+         LIMIT $3`,
+        [qBlind, `%${search}%`, limit]
+      );
+      resultRows = rows;
+    }
+
+    res.json(resultRows.map(toDto));
   } catch (err) {
     console.error('[GET /api/staff/clients]', err);
-    res.status(500).json({ error: 'Ошибка сервера' });
+    if (!res.headersSent) {
+      const isTimeout = err.message?.includes('statement timeout') || err.code === '57014';
+      res.status(isTimeout ? 504 : 500).json({
+        error: isTimeout
+          ? 'Запрос занял слишком много времени. Попробуйте снова.'
+          : 'Ошибка сервера при поиске клиентов',
+      });
+    }
+  } finally {
+    if (client) client.release();
   }
 });
 
@@ -95,6 +192,8 @@ router.get('/clients/:clientId', auth, staffOnly, async (req, res) => {
     }
 
     const client = clientRows[0];
+    client.full_name = decryptData(client.fio_encrypted) || client.full_name || 'Без имени';
+    client.inn = decryptData(client.inn_encrypted) || client.inn || '-';
 
     // Кредиты клиента
     const { rows: loans } = await pool.query(
@@ -144,7 +243,7 @@ router.get('/loans/:loanId', auth, staffOnly, async (req, res) => {
     const pool = getPool(req);
 
     const { rows: loanRows } = await pool.query(
-      `SELECT l.*, c.full_name, c.phone_main, c.inn
+      `SELECT l.*, c.fio_encrypted, c.inn_encrypted, c.full_name, c.phone_main, c.inn
        FROM loans l
        JOIN clients c ON c.client_id = l.client_id
        WHERE l.loan_id = $1
@@ -156,6 +255,8 @@ router.get('/loans/:loanId', auth, staffOnly, async (req, res) => {
     if (!loanRows.length) return res.status(404).json({ error: 'Кредит не найден' });
 
     const loan = loanRows[0];
+    loan.full_name = decryptData(loan.fio_encrypted) || loan.full_name || 'Без имени';
+    loan.inn = decryptData(loan.inn_encrypted) || loan.inn || '-';
 
     // График платежей
     const { rows: schedule } = await pool.query(
@@ -194,6 +295,81 @@ router.get('/loans/:loanId', auth, staffOnly, async (req, res) => {
   } catch (err) {
     console.error('[GET /api/staff/loans/:loanId]', err);
     res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/staff/loans — оформление нового займа (без выдачи)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/loans', auth, staffOnly, async (req, res) => {
+  try {
+    const pool = getPool(req);
+    const { 
+      client_id, loan_amount, interest_rate_annual, term_months, repayment_type, 
+      issue_date, nbkr_category, purpose, collateral_description, collateral_value, fees_percent 
+    } = req.body;
+    
+    // Генерируем номер договора как в AURUM (КД-YYYYMM-XXX)
+    const y = issue_date.substring(0, 4);
+    const m = issue_date.substring(5, 7);
+    const seq = Math.floor(Math.random() * 900) + 100;
+    const contract_number = `КД-${y}${m}-${seq}`;
+
+    // Дата окончания (issue_date + term_months)
+    const issueDateObj = new Date(issue_date);
+    issueDateObj.setMonth(issueDateObj.getMonth() + (term_months || 1));
+    const end_date = issueDateObj.toISOString().split('T')[0];
+
+    // Динамически определяем колонки (как AURUM), чтобы не падать при отсутствии fees_percent
+    const { rows: colRows } = await pool.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name = 'loans' AND table_schema = 'public'`
+    );
+    const existingCols = new Set(colRows.map(r => r.column_name));
+
+    const fields = [
+      ['client_id', client_id],
+      ['contract_number', contract_number],
+      ['loan_amount', loan_amount],
+      ['interest_rate_annual', interest_rate_annual],
+      ['term_months', term_months],
+      ['repayment_type', repayment_type],
+      ['issue_date', issue_date],
+      ['end_date', end_date],
+      ['status', 'Оформлен'],
+      ['base_year', 365],
+      ['period_od_months', 1],
+      ['period_int_months', 1],
+      ['nbkr_category', nbkr_category || 'Прочие'],
+      ['purpose', purpose || ''],
+      ['collateral_description', collateral_description || ''],
+      ['collateral_value', collateral_value || 0],
+      ['principal_balance', loan_amount],
+    ];
+    // Опциональные колонки (могут отсутствовать в старых БД)
+    if (existingCols.has('fees_percent')) fields.push(['fees_percent', fees_percent || 0]);
+
+    const cols = [];
+    const vals = [];
+    const placeholders = [];
+    for (let i = 0; i < fields.length; i++) {
+      const [col, val] = fields[i];
+      if (!existingCols.has(col)) continue;
+      cols.push(`"${col}"`);
+      vals.push(val === '' || (typeof val === 'number' && isNaN(val)) ? null : val);
+      placeholders.push(`$${vals.length}`);
+    }
+    // created_at всегда
+    cols.push('created_at');
+    vals.push('NOW()');
+    // не параметризуем NOW()
+
+    const insertSql = `INSERT INTO loans (${cols.join(', ')}) VALUES (${placeholders.join(', ')}, NOW()) RETURNING loan_id`;
+    const { rows } = await pool.query(insertSql, vals);
+
+    res.status(201).json({ success: true, loan_id: rows[0].loan_id });
+  } catch (err) {
+    console.error('[POST /api/staff/loans]', err);
+    res.status(500).json({ error: err.message || 'Ошибка сервера' });
   }
 });
 
@@ -388,6 +564,61 @@ router.get('/journal', auth, staffOnly, async (req, res) => {
   } catch (err) {
     console.error('[GET /api/staff/journal]', err);
     res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/staff/visits — сохранение GPS-метки визита к клиенту
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/visits', auth, staffOnly, async (req, res) => {
+  try {
+    const pool = getPool(req);
+    // Убедимся, что таблица существует (для простоты деплоя)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS staff_visits (
+        id SERIAL PRIMARY KEY,
+        client_id INT REFERENCES clients(client_id),
+        staff_id INT,
+        latitude DECIMAL(10, 8),
+        longitude DECIMAL(11, 8),
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    const { client_id, latitude, longitude, notes } = req.body;
+    const staff_id = req.user?.userId || req.user?.id || 1; 
+
+    await pool.query(
+      `INSERT INTO staff_visits (client_id, staff_id, latitude, longitude, notes)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [client_id, staff_id, latitude, longitude, notes]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[POST /api/staff/visits]', err);
+    res.status(500).json({ error: 'Ошибка сохранения визита' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/staff/visits — получение списка визитов за сегодня (для руководителя)
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/visits', auth, staffOnly, async (req, res) => {
+  try {
+    const pool = getPool(req);
+    const { rows } = await pool.query(`
+      SELECT v.*, c.full_name as client_name 
+      FROM staff_visits v
+      LEFT JOIN clients c ON c.client_id = v.client_id
+      WHERE v.created_at::date = CURRENT_DATE
+      ORDER BY v.created_at DESC
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error('[GET /api/staff/visits]', err);
+    res.status(500).json({ error: 'Ошибка получения визитов' });
   }
 });
 

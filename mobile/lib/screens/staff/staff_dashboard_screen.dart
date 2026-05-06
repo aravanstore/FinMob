@@ -1,9 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:intl/intl.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import '../../services/theme_controller.dart';
@@ -11,11 +11,11 @@ import '../../theme/app_theme.dart';
 
 // ─── Цветовая палитра ────────────────────────────────────────────────────────
 class _C {
-  static const gold     = Color(0xFFF59E0B);
-  static const green    = Color(0xFF10B981);
-  static const red      = Color(0xFFEF4444);
-  static const orange   = Color(0xFFF97316);
-  static const accent   = Color(0xFF2563EB);
+  static const gold = Color(0xFFF59E0B);
+  static const green = Color(0xFF10B981);
+  static const red = Color(0xFFEF4444);
+  static const orange = Color(0xFFF97316);
+  static const accent = Color(0xFF2563EB);
   static const accentLt = Color(0xFF3B82F6);
 }
 
@@ -45,14 +45,15 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _fadeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _fadeCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 600));
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _fadeCtrl.forward();
 
-    _statsFuture     = _api.getDashboardStats();
-    _overdueFuture   = _api.getOverdueLoans();
+    _statsFuture = _api.getDashboardStats();
+    _overdueFuture = _api.getOverdueLoans();
     _approvalsFuture = _api.getApprovals();
-    _doSearch();
+    // _doSearch() убран из initState — не нужно грузить клиентов при старте
   }
 
   @override
@@ -63,10 +64,14 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
     super.dispose();
   }
 
+  Timer? _searchDebounce;
+
   Future<void> _doSearch() async {
+    if (!mounted) return;
     setState(() => _isSearching = true);
     try {
-      final res = await _api.searchClients(_searchCtrl.text.trim());
+      final query = _searchCtrl.text.trim();
+      final res = await _api.searchClients(query);
       if (mounted) setState(() => _searchResults = res);
     } catch (e) {
       if (mounted) {
@@ -87,10 +92,11 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
   Widget build(BuildContext context) {
     final pal = AppPalette.of(context);
     // ВАЖНО: Добавляем чтение locale, чтобы виджет перестраивался при смене языка
-    final currentLocale = context.locale; 
-    
+    final currentLocale = context.locale;
+
     final auth = context.read<AuthService>();
-    final fmt  = NumberFormat('#,##0.00', currentLocale.languageCode == 'ru' ? 'ru_RU' : 'en_US');
+    final fmt = NumberFormat(
+        '#,##0.00', currentLocale.languageCode == 'ru' ? 'ru_RU' : 'en_US');
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -120,14 +126,15 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
     return AppBar(
       backgroundColor: pal.bg,
       elevation: 0,
-      systemOverlayStyle: Theme.of(context).brightness == Brightness.light 
-          ? SystemUiOverlayStyle.dark 
+      systemOverlayStyle: Theme.of(context).brightness == Brightness.light
+          ? SystemUiOverlayStyle.dark
           : SystemUiOverlayStyle.light,
       titleSpacing: 20,
       title: Row(
         children: [
           Container(
-            width: 38, height: 38,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [_C.accent, _C.accentLt],
@@ -136,7 +143,8 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
               ),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.account_balance_rounded, color: Colors.white, size: 20),
+            child: const Icon(Icons.account_balance_rounded,
+                color: Colors.white, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -211,10 +219,30 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _NavItem(icon: Icons.home_rounded,           label: 'staff.home'.tr(),      index: 0, current: _tabIndex, onTap: _setTab),
-              _NavItem(icon: Icons.people_alt_rounded,     label: 'staff.clients'.tr(),   index: 1, current: _tabIndex, onTap: _setTab),
-              _NavItem(icon: Icons.fact_check_rounded,     label: 'staff.approvals'.tr(), index: 2, current: _tabIndex, onTap: _setTab),
-              _NavItem(icon: Icons.warning_amber_rounded,  label: 'staff.overdue'.tr(),   index: 3, current: _tabIndex, onTap: _setTab),
+              _NavItem(
+                  icon: Icons.home_rounded,
+                  label: 'staff.home'.tr(),
+                  index: 0,
+                  current: _tabIndex,
+                  onTap: _setTab),
+              _NavItem(
+                  icon: Icons.people_alt_rounded,
+                  label: 'staff.clients'.tr(),
+                  index: 1,
+                  current: _tabIndex,
+                  onTap: _setTab),
+              _NavItem(
+                  icon: Icons.fact_check_rounded,
+                  label: 'staff.approvals'.tr(),
+                  index: 2,
+                  current: _tabIndex,
+                  onTap: _setTab),
+              _NavItem(
+                  icon: Icons.warning_amber_rounded,
+                  label: 'staff.overdue'.tr(),
+                  index: 3,
+                  current: _tabIndex,
+                  onTap: _setTab),
             ],
           ),
         ),
@@ -230,7 +258,8 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
     return RefreshIndicator(
       color: _C.accentLt,
       backgroundColor: pal.card,
-      onRefresh: () async => setState(() => _statsFuture = _api.getDashboardStats()),
+      onRefresh: () async =>
+          setState(() => _statsFuture = _api.getDashboardStats()),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
@@ -253,7 +282,8 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
               final data = snap.data ?? {'cash_balance': 0, 'bank_balance': 0};
               return Row(
                 children: [
-                  Expanded(child: _BalanceCard(
+                  Expanded(
+                      child: _BalanceCard(
                     label: 'Касса',
                     code: '10001',
                     amount: fmt.format(data['cash_balance']),
@@ -261,7 +291,8 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                     color: _C.green,
                   )),
                   const SizedBox(width: 12),
-                  Expanded(child: _BalanceCard(
+                  Expanded(
+                      child: _BalanceCard(
                     label: 'Кор. счёт',
                     code: '10101',
                     amount: fmt.format(data['bank_balance']),
@@ -307,15 +338,25 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                 icon: Icons.add_card_rounded,
                 label: 'Новый займ',
                 color: _C.green,
-                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('В разработке'), behavior: SnackBarBehavior.floating),
-                ),
+                onTap: () => context.push('/staff/issue-loan'),
+              ),
+              _ActionCard(
+                icon: Icons.person_add_rounded,
+                label: 'Новый клиент',
+                color: _C.accent,
+                onTap: () => context.push('/staff/register-client'),
               ),
               _ActionCard(
                 icon: Icons.assignment_rounded,
                 label: 'Журнал',
                 color: _C.accent,
                 onTap: () => context.push('/staff/journal'),
+              ),
+              _ActionCard(
+                icon: Icons.map_rounded,
+                label: 'Карта визитов',
+                color: _C.gold,
+                onTap: () => context.push('/staff/visits'),
               ),
             ],
           ),
@@ -349,19 +390,31 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                     keyboardType: TextInputType.text,
                     textInputAction: TextInputAction.search,
                     style: TextStyle(
-                      color: pal.textPri, 
+                      color: pal.textPri,
                       fontSize: 15,
                       fontFamily: 'sans-serif', // Системный шрифт
                     ),
                     decoration: InputDecoration(
                       hintText: 'staff.search_hint'.tr(),
                       hintStyle: TextStyle(color: pal.textHint, fontSize: 15),
-                      prefixIcon: Icon(Icons.search_rounded, color: pal.textSec, size: 20),
+                      prefixIcon: Icon(Icons.search_rounded,
+                          color: pal.textSec, size: 20),
                       border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                     ),
-                    onChanged: (v) { 
-                      if (v.isEmpty || v.length > 1) _doSearch(); 
+                    onChanged: (v) {
+                      _searchDebounce?.cancel();
+                      if (v.trim().isEmpty) {
+                        setState(() => _searchResults = []);
+                        return;
+                      }
+                      if (v.trim().length > 1) {
+                        _searchDebounce =
+                            Timer(const Duration(milliseconds: 500), () {
+                          _doSearch();
+                        });
+                      }
                     },
                     onFieldSubmitted: (_) => _doSearch(),
                   ),
@@ -370,28 +423,31 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
               const SizedBox(width: 10),
               GestureDetector(
                 onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Создание клиента в разработке'), behavior: SnackBarBehavior.floating),
+                  const SnackBar(
+                      content: Text('Создание клиента в разработке'),
+                      behavior: SnackBarBehavior.floating),
                 ),
                 child: Container(
-                  width: 48, height: 48,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [_C.accent, _C.accentLt]),
+                    gradient:
+                        const LinearGradient(colors: [_C.accent, _C.accentLt]),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Icon(Icons.person_add_rounded, color: Colors.white, size: 22),
+                  child: const Icon(Icons.person_add_rounded,
+                      color: Colors.white, size: 22),
                 ),
               ),
             ],
           ),
         ),
-
         if (_isSearching)
           LinearProgressIndicator(
             backgroundColor: pal.surface,
             color: _C.accentLt,
             minHeight: 2,
           ),
-
         Expanded(
           child: _searchResults.isEmpty
               ? _EmptyState(
@@ -406,7 +462,8 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                   itemBuilder: (ctx, i) => _ClientCard(
                     client: _searchResults[i],
                     fmt: fmt,
-                    onTap: () => context.push('/staff/client/${_searchResults[i]['client_id']}'),
+                    onTap: () => context.push(
+                        '/staff/client/${_searchResults[i]['client_id']}'),
                   ),
                 ),
         ),
@@ -421,19 +478,23 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
       future: _approvalsFuture,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: _C.accentLt));
+          return const Center(
+              child: CircularProgressIndicator(color: _C.accentLt));
         }
         if (snap.hasError) return _ErrorTile(message: snap.error.toString());
 
         final list = snap.data ?? [];
         if (list.isEmpty) {
-          return _EmptyState(icon: Icons.fact_check_rounded, message: 'staff.no_approvals'.tr());
+          return _EmptyState(
+              icon: Icons.fact_check_rounded,
+              message: 'staff.no_approvals'.tr());
         }
 
         return RefreshIndicator(
           color: _C.accentLt,
           backgroundColor: pal.card,
-          onRefresh: () async => setState(() => _approvalsFuture = _api.getApprovals()),
+          onRefresh: () async =>
+              setState(() => _approvalsFuture = _api.getApprovals()),
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             itemCount: list.length,
@@ -458,19 +519,23 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
       future: _overdueFuture,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: _C.accentLt));
+          return const Center(
+              child: CircularProgressIndicator(color: _C.accentLt));
         }
         if (snap.hasError) return _ErrorTile(message: snap.error.toString());
 
         final list = snap.data ?? [];
         if (list.isEmpty) {
-          return _EmptyState(icon: Icons.check_circle_rounded, message: 'staff.no_overdue'.tr());
+          return _EmptyState(
+              icon: Icons.check_circle_rounded,
+              message: 'staff.no_overdue'.tr());
         }
 
         return RefreshIndicator(
           color: _C.accentLt,
           backgroundColor: pal.card,
-          onRefresh: () async => setState(() => _overdueFuture = _api.getOverdueLoans()),
+          onRefresh: () async =>
+              setState(() => _overdueFuture = _api.getOverdueLoans()),
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             itemCount: list.length,
@@ -513,27 +578,33 @@ class _LangButton extends StatelessWidget {
         ),
         onSelected: (locale) => EasyLocalization.of(context)!.setLocale(locale),
         itemBuilder: (_) => [
-          _langItem('RU', 'Русский',   const Locale('ru'), pal),
+          _langItem('RU', 'Русский', const Locale('ru'), pal),
           _langItem('KY', 'Кыргызча', const Locale('ky'), pal),
-          _langItem('EN', 'English',   const Locale('en'), pal),
+          _langItem('EN', 'English', const Locale('en'), pal),
         ],
       ),
     );
   }
 
-  PopupMenuItem<Locale> _langItem(String code, String label, Locale locale, AppPalette pal) {
+  PopupMenuItem<Locale> _langItem(
+      String code, String label, Locale locale, AppPalette pal) {
     return PopupMenuItem(
       value: locale,
       child: Row(
         children: [
           Container(
-            width: 32, height: 22,
+            width: 32,
+            height: 22,
             decoration: BoxDecoration(
               color: pal.border,
               borderRadius: BorderRadius.circular(4),
             ),
             alignment: Alignment.center,
-            child: Text(code, style: TextStyle(color: pal.textPri, fontSize: 11, fontWeight: FontWeight.bold)),
+            child: Text(code,
+                style: TextStyle(
+                    color: pal.textPri,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold)),
           ),
           const SizedBox(width: 12),
           Text(label, style: TextStyle(color: pal.textPri)),
@@ -550,7 +621,12 @@ class _NavItem extends StatelessWidget {
   final int current;
   final void Function(int) onTap;
 
-  const _NavItem({required this.icon, required this.label, required this.index, required this.current, required this.onTap});
+  const _NavItem(
+      {required this.icon,
+      required this.label,
+      required this.index,
+      required this.current,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -600,7 +676,10 @@ class _WelcomeBanner extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: _C.accent.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 8)),
+          BoxShadow(
+              color: _C.accent.withOpacity(0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 8)),
         ],
       ),
       child: Row(
@@ -609,9 +688,16 @@ class _WelcomeBanner extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('staff.welcome'.tr(), style: const TextStyle(color: Colors.white60, fontSize: 13)),
+                Text('staff.welcome'.tr(),
+                    style:
+                        const TextStyle(color: Colors.white60, fontSize: 13)),
                 const SizedBox(height: 6),
-                Text('staff.question'.tr(), style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700, height: 1.3)),
+                Text('staff.question'.tr(),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        height: 1.3)),
               ],
             ),
           ),
@@ -621,7 +707,8 @@ class _WelcomeBanner extends StatelessWidget {
               color: Colors.white.withOpacity(0.12),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Icon(Icons.bar_chart_rounded, color: Colors.white, size: 28),
+            child: const Icon(Icons.bar_chart_rounded,
+                color: Colors.white, size: 28),
           ),
         ],
       ),
@@ -638,9 +725,18 @@ class _SectionHeader extends StatelessWidget {
     final pal = AppPalette.of(context);
     return Row(
       children: [
-        Container(width: 3, height: 16, decoration: BoxDecoration(color: _C.accentLt, borderRadius: BorderRadius.circular(2))),
+        Container(
+            width: 3,
+            height: 16,
+            decoration: BoxDecoration(
+                color: _C.accentLt, borderRadius: BorderRadius.circular(2))),
         const SizedBox(width: 10),
-        Text(title, style: TextStyle(color: pal.textPri, fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 0.2)),
+        Text(title,
+            style: TextStyle(
+                color: pal.textPri,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2)),
       ],
     );
   }
@@ -650,7 +746,12 @@ class _BalanceCard extends StatelessWidget {
   final String label, code, amount;
   final IconData icon;
   final Color color;
-  const _BalanceCard({required this.label, required this.code, required this.amount, required this.icon, required this.color});
+  const _BalanceCard(
+      {required this.label,
+      required this.code,
+      required this.amount,
+      required this.icon,
+      required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -669,15 +770,22 @@ class _BalanceCard extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10)),
                 child: Icon(icon, color: color, size: 18),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Text('$label ($code)', style: TextStyle(color: pal.textSec, fontSize: 11)),
+          Text('$label ($code)',
+              style: TextStyle(color: pal.textSec, fontSize: 11)),
           const SizedBox(height: 4),
-          Text('$amount сом', style: TextStyle(color: pal.textPri, fontSize: 15, fontWeight: FontWeight.w700)),
+          Text('$amount сом',
+              style: TextStyle(
+                  color: pal.textPri,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -689,7 +797,11 @@ class _ActionCard extends StatelessWidget {
   final String label;
   final Color color;
   final VoidCallback onTap;
-  const _ActionCard({required this.icon, required this.label, required this.color, required this.onTap});
+  const _ActionCard(
+      {required this.icon,
+      required this.label,
+      required this.color,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -714,7 +826,12 @@ class _ActionCard extends StatelessWidget {
               child: Icon(icon, color: color, size: 26),
             ),
             const SizedBox(height: 10),
-            Text(label, style: TextStyle(color: pal.textPri, fontWeight: FontWeight.w600, fontSize: 13), textAlign: TextAlign.center),
+            Text(label,
+                style: TextStyle(
+                    color: pal.textPri,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13),
+                textAlign: TextAlign.center),
           ],
         ),
       ),
@@ -726,14 +843,16 @@ class _ClientCard extends StatelessWidget {
   final dynamic client;
   final NumberFormat fmt;
   final VoidCallback onTap;
-  const _ClientCard({required this.client, required this.fmt, required this.onTap});
+  const _ClientCard(
+      {required this.client, required this.fmt, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final pal = AppPalette.of(context);
-    final loans   = client['active_loans_count'] ?? 0;
-    final balance = double.tryParse(client['total_balance']?.toString() ?? '0') ?? 0;
-    final phone   = client['phone_main'] ?? '';
+    final loans = client['active_loans_count'] ?? 0;
+    final balance =
+        double.tryParse(client['total_balance']?.toString() ?? '0') ?? 0;
+    final phone = client['phone_main'] ?? '';
 
     return GestureDetector(
       onTap: onTap,
@@ -748,7 +867,8 @@ class _ClientCard extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 42, height: 42,
+              width: 42,
+              height: 42,
               decoration: BoxDecoration(
                 color: _C.accent.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
@@ -756,7 +876,10 @@ class _ClientCard extends StatelessWidget {
               alignment: Alignment.center,
               child: Text(
                 (client['full_name'] ?? '?').toString().substring(0, 1),
-                style: const TextStyle(color: _C.accentLt, fontSize: 18, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                    color: _C.accentLt,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold),
               ),
             ),
             const SizedBox(width: 14),
@@ -765,16 +888,23 @@ class _ClientCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(client['full_name'] ?? 'Без имени',
-                      style: TextStyle(color: pal.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                      style: TextStyle(
+                          color: pal.textPri,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14)),
                   const SizedBox(height: 3),
-                  Text(phone, style: TextStyle(color: pal.textSec, fontSize: 12)),
+                  Text(phone,
+                      style: TextStyle(color: pal.textSec, fontSize: 12)),
                   const SizedBox(height: 6),
                   Row(
                     children: [
                       _Chip(label: '$loans кр.', color: _C.accentLt),
                       const SizedBox(width: 8),
                       Text('${fmt.format(balance)} сом',
-                          style: const TextStyle(color: _C.green, fontSize: 12, fontWeight: FontWeight.w600)),
+                          style: const TextStyle(
+                              color: _C.green,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ],
@@ -792,7 +922,8 @@ class _ApprovalCard extends StatelessWidget {
   final dynamic item;
   final NumberFormat fmt;
   final VoidCallback onTap;
-  const _ApprovalCard({required this.item, required this.fmt, required this.onTap});
+  const _ApprovalCard(
+      {required this.item, required this.fmt, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -811,13 +942,15 @@ class _ApprovalCard extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 42, height: 42,
+              width: 42,
+              height: 42,
               decoration: BoxDecoration(
                 color: _C.orange.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               alignment: Alignment.center,
-              child: const Icon(Icons.hourglass_top_rounded, color: _C.orange, size: 20),
+              child: const Icon(Icons.hourglass_top_rounded,
+                  color: _C.orange, size: 20),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -825,9 +958,13 @@ class _ApprovalCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(item['full_name'] ?? '',
-                      style: TextStyle(color: pal.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                      style: TextStyle(
+                          color: pal.textPri,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14)),
                   const SizedBox(height: 4),
-                  Text('${item['purpose'] ?? 'Кредит'} · ${fmt.format(amount)} сом',
+                  Text(
+                      '${item['purpose'] ?? 'Кредит'} · ${fmt.format(amount)} сом',
                       style: const TextStyle(color: _C.orange, fontSize: 12)),
                 ],
               ),
@@ -844,12 +981,14 @@ class _OverdueCard extends StatelessWidget {
   final dynamic item;
   final NumberFormat fmt;
   final VoidCallback onTap;
-  const _OverdueCard({required this.item, required this.fmt, required this.onTap});
+  const _OverdueCard(
+      {required this.item, required this.fmt, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final pal = AppPalette.of(context);
-    final debt = double.tryParse(item['principal_balance']?.toString() ?? '0') ?? 0;
+    final debt =
+        double.tryParse(item['principal_balance']?.toString() ?? '0') ?? 0;
     final days = item['days_overdue'] ?? 0;
     return GestureDetector(
       onTap: onTap,
@@ -864,7 +1003,8 @@ class _OverdueCard extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 42, height: 42,
+              width: 42,
+              height: 42,
               decoration: BoxDecoration(
                 color: _C.red.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
@@ -878,7 +1018,10 @@ class _OverdueCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(item['full_name'] ?? '',
-                      style: TextStyle(color: pal.textPri, fontWeight: FontWeight.w600, fontSize: 14)),
+                      style: TextStyle(
+                          color: pal.textPri,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14)),
                   const SizedBox(height: 4),
                   Text('${fmt.format(debt)} сом · $days дн.',
                       style: const TextStyle(color: _C.red, fontSize: 12)),
@@ -908,7 +1051,9 @@ class _Chip extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: color.withOpacity(0.3)),
       ),
-      child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+      child: Text(label,
+          style: TextStyle(
+              color: color, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -945,7 +1090,9 @@ class _ErrorTile extends StatelessWidget {
           children: [
             const Icon(Icons.error_outline_rounded, color: _C.red, size: 40),
             const SizedBox(height: 12),
-            Text(message, style: TextStyle(color: pal.textSec), textAlign: TextAlign.center),
+            Text(message,
+                style: TextStyle(color: pal.textSec),
+                textAlign: TextAlign.center),
           ],
         ),
       ),

@@ -3,9 +3,13 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:firebase_core/firebase_core.dart';
 
+import 'firebase_options.dart';
+import 'services/push_notification_service.dart';
 import 'services/auth_service.dart';
 import 'services/theme_controller.dart';
+import 'services/api_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/payments_screen.dart';
@@ -17,15 +21,28 @@ import 'screens/staff/client_details_screen.dart';
 import 'screens/staff/loan_details_screen.dart';
 import 'screens/staff/share_details_screen.dart';
 import 'screens/staff/journal_screen.dart';
+import 'screens/staff/issue_loan_screen.dart';
+import 'screens/staff/visits_screen.dart';
+import 'screens/staff/client_registration_screen.dart';
 import 'screens/inquiry_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
+  // Мгновенный старт: Flutter инициализируется быстро
   WidgetsFlutterBinding.ensureInitialized();
-  await EasyLocalization.ensureInitialized();
+  
+  // Инициализация Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
-  final authService = AuthService();
-  await authService.init();
+  // Локализацию нужно подождать (это быстро, < 100мс)
+  await EasyLocalization.ensureInitialized();
+  
+  final apiService = ApiService();
+  final authService = AuthService(apiService);
+  
+  PushNotificationService.init(apiService);
 
   runApp(
     EasyLocalization(
@@ -33,16 +50,19 @@ void main() async {
       path: 'assets/translations',
       fallbackLocale: const Locale('ru'),
       useOnlyLangCode: true,
-      saveLocale: false,
       child: MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => authService),
           ChangeNotifierProvider(create: (_) => ThemeController()),
+          Provider<ApiService>.value(value: apiService),
         ],
         child: const FinCoreApp(),
       ),
     ),
   );
+  
+  // Инициализируем данные уже после того, как приложение отрисовало первый кадр
+  authService.init();
 }
 
 class FinCoreApp extends StatefulWidget {
@@ -117,6 +137,18 @@ class _FinCoreAppState extends State<FinCoreApp> {
         GoRoute(
           path: '/staff/journal',
           builder: (_, __) => const JournalScreen(),
+        ),
+        GoRoute(
+          path: '/staff/visits',
+          builder: (_, __) => const VisitsScreen(),
+        ),
+        GoRoute(
+          path: '/staff/register-client',
+          builder: (_, __) => const ClientRegistrationScreen(),
+        ),
+        GoRoute(
+          path: '/staff/issue-loan',
+          builder: (_, __) => const IssueLoanScreen(),
         ),
       ],
       redirect: (context, state) {

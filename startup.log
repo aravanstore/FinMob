@@ -14,3 +14,35 @@
 │ 2  │ finmob-backend    │ default     │ 1.0.0   │ fork    │ 11956    │ 0s     │ 0    │ online    │ 0%       │ 0b       │ user     │ disabled │
 └────┴───────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
 [04.05.2026 20:45:19,03] PM2 resurrect done. 
+[05.05.2026 12:50:19,85] Starting PM2 services... 
+[PM2] Spawning PM2 daemon with pm2_home=C:\Users\user\.pm2
+[PM2] PM2 Successfully daemonized
+[PM2] Resurrecting
+[PM2] Restoring processes located in C:\Users\user\.pm2\dump.pm2
+[PM2] Process c:\AURUM\server.js restored
+[PM2] Process C:\PROGRAM FILES\NODEJS\NPX.CMD restored
+[PM2] Process c:\Projects\FinMob\backend\index.js restored
+┌────┬───────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name              │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼───────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 0  │ aurum-server      │ default     │ 2.0.0   │ fork    │ 33400    │ 0s     │ 0    │ online    │ 0%       │ 70.5mb   │ user     │ disabled │
+│ 1  │ aurum-ui          │ default     │ N/A     │ fork    │ 17140    │ 0      │ 1    │ stopped   │ 0%       │ 0b       │ user     │ disabled │
+│ 2  │ finmob-backend    │ default     │ 1.0.0   │ fork    │ 24480    │ 0s     │ 0    │ online    │ 0%       │ 61.7mb   │ user     │ disabled │
+└────┴───────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+[05.05.2026 12:50:32,52] PM2 resurrect done. 
+[06.05.2026  7:15:15,67] Starting PM2 services... 
+[PM2] Spawning PM2 daemon with pm2_home=C:\Users\user\.pm2
+[PM2] PM2 Successfully daemonized
+[PM2] Resurrecting
+[PM2] Restoring processes located in C:\Users\user\.pm2\dump.pm2
+[PM2] Process c:\AURUM\server.js restored
+[PM2] Process C:\PROGRAM FILES\NODEJS\NPX.CMD restored
+[PM2] Process c:\Projects\FinMob\backend\index.js restored
+┌────┬───────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬──────────┬──────────┐
+│ id │ name              │ namespace   │ version │ mode    │ pid      │ uptime │ ↺    │ status    │ cpu      │ mem      │ user     │ watching │
+├────┼───────────────────┼─────────────┼─────────┼─────────┼──────────┼────────┼──────┼───────────┼──────────┼──────────┼──────────┼──────────┤
+│ 0  │ aurum-server      │ default     │ 2.0.0   │ fork    │ 31288    │ 0s     │ 0    │ online    │ 0%       │ 66.7mb   │ user     │ disabled │
+│ 1  │ aurum-ui          │ default     │ N/A     │ fork    │ 32828    │ 0      │ 1    │ stopped   │ 0%       │ 0b       │ user     │ disabled │
+│ 2  │ finmob-backend    │ default     │ 1.0.0   │ fork    │ 14560    │ 0s     │ 0    │ online    │ 0%       │ 59.1mb   │ user     │ disabled │
+└────┴───────────────────┴─────────────┴─────────┴─────────┴──────────┴────────┴──────┴───────────┴──────────┴──────────┴──────────┴──────────┘
+[06.05.2026  7:15:29,42] PM2 resurrect done. 

@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
+require('./push_scheduler'); // запускает cron каждый день в 09:00
 
 const app = express();
 app.use(cors());
@@ -28,6 +29,7 @@ app.use('/api/shares',   require('./routes/shares'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/inquiries', require('./routes/inquiries'));
 app.use('/api/announcements', require('./routes/announcements'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // Сотрудники: ТОЛЬКО ЧТЕНИЕ (read-only)
 // Правило безопасности: мобильный может попасть в чужие руки.

@@ -20,3 +20,11 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Secrets
+backend/serviceAccountKey.json
+backend/.env
+
+# Logs
+backend/requests.log
+backend/*.log

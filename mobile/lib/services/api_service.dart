@@ -1,4 +1,7 @@
+import 'dart:io';
+import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiService {
@@ -14,25 +17,38 @@ class ApiService {
 
   final _storage = const FlutterSecureStorage();
 
+  // Кэш токена в памяти — избегаем многократного чтения Android Keystore
+  String? _cachedToken;
+  Future<String?>? _tokenReadFuture;
+
   static Function()? onUnauthorized;
   
+  // Публичный метод для обновления кэша токена (вызывается из AuthService)
+  void setToken(String? token) => _cachedToken = token;
+
   late final Dio _dio = Dio(BaseOptions(
     baseUrl: isProduction ? prodUrl : devUrl,
-    connectTimeout: const Duration(seconds: 15),
-    receiveTimeout: const Duration(seconds: 15),
+    connectTimeout: const Duration(seconds: 8),
+    receiveTimeout: const Duration(seconds: 8),
     headers: {'Content-Type': 'application/json'},
   ))
     ..interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-        final token = await _storage.read(key: 'jwt_token');
-        if (token != null) {
-          options.headers['Authorization'] = 'Bearer $token';
+        // Если токена нет в кэше — читаем один раз.
+        if (_cachedToken == null) {
+          _tokenReadFuture ??= _storage.read(key: 'jwt_token');
+          _cachedToken = await _tokenReadFuture;
+          _tokenReadFuture = null;
+        }
+        
+        if (_cachedToken != null) {
+          options.headers['Authorization'] = 'Bearer $_cachedToken';
         }
         return handler.next(options);
       },
       onError: (DioException e, handler) async {
         if (e.response?.statusCode == 401) {
-          // Токен истёк или невалиден — чистим хранилище и уведомляем
+          _cachedToken = null; // Сбрасываем кэш при 401
           await _storage.delete(key: 'jwt_token');
           onUnauthorized?.call();
         }
@@ -119,26 +135,47 @@ class ApiService {
   }
 
   // ─── STAFF ────────────────────────────────────────────────────────────────
+  
+  Future<dynamic> _requestWithCache(String path, {Map<String, dynamic>? queryParameters}) async {
+    final cacheKey = 'cache_$path${queryParameters != null ? '_${queryParameters.toString()}' : ''}';
+    final prefs = await SharedPreferences.getInstance();
+    
+    try {
+      final response = await _dio.get(path, queryParameters: queryParameters);
+      await prefs.setString(cacheKey, jsonEncode(response.data));
+      return response.data;
+    } catch (e) {
+      if (e is DioException && (e.type == DioExceptionType.connectionTimeout || 
+          e.type == DioExceptionType.receiveTimeout || 
+          e.type == DioExceptionType.unknown || 
+          e.type == DioExceptionType.connectionError)) {
+        final cachedStr = prefs.getString(cacheKey);
+        if (cachedStr != null) {
+          return jsonDecode(cachedStr);
+        }
+      }
+      rethrow;
+    }
+  }
 
   Future<List<dynamic>> searchClients(String query) async {
-    final response = await _dio
-        .get('/api/staff/clients', queryParameters: {'search': query});
-    return response.data as List<dynamic>;
+    final data = await _requestWithCache('/api/staff/clients', queryParameters: {'search': query});
+    return data as List<dynamic>;
   }
 
   Future<Map<String, dynamic>> getClientDetails(String clientId) async {
-    final response = await _dio.get('/api/staff/clients/$clientId');
-    return response.data as Map<String, dynamic>;
+    final data = await _requestWithCache('/api/staff/clients/$clientId');
+    return data as Map<String, dynamic>;
   }
 
   Future<List<dynamic>> getOverdueLoans() async {
-    final response = await _dio.get('/api/staff/overdue');
-    return response.data as List<dynamic>;
+    final data = await _requestWithCache('/api/staff/overdue');
+    return data as List<dynamic>;
   }
 
   Future<Map<String, dynamic>> getLoanDetails(String loanId) async {
-    final response = await _dio.get('/api/staff/loans/$loanId');
-    return response.data as Map<String, dynamic>;
+    final data = await _requestWithCache('/api/staff/loans/$loanId');
+    return data as Map<String, dynamic>;
   }
 
   Future<List<dynamic>> getClientShareHistory(String clientId) async {
@@ -152,8 +189,8 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> getDashboardStats() async {
-    final response = await _dio.get('/api/staff/dashboard-stats');
-    return response.data as Map<String, dynamic>;
+    final data = await _requestWithCache('/api/staff/dashboard-stats');
+    return data as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> getJournal({
@@ -168,6 +205,30 @@ class ApiService {
       if (search != null) 'search': search,
       if (accountCode != null) 'accountCode': accountCode,
     });
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<void> logVisit(int clientId, double lat, double lng, String notes) async {
+    await _dio.post('/api/staff/visits', data: {
+      'client_id': clientId,
+      'latitude': lat,
+      'longitude': lng,
+      'notes': notes,
+    });
+  }
+
+  Future<List<dynamic>> getVisits() async {
+    final response = await _dio.get('/api/staff/visits');
+    return response.data as List<dynamic>;
+  }
+
+  Future<Map<String, dynamic>> createClient(Map<String, dynamic> data) async {
+    final response = await _dio.post('/api/staff/clients', data: data);
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> createLoan(Map<String, dynamic> data) async {
+    final response = await _dio.post('/api/staff/loans', data: data);
     return response.data as Map<String, dynamic>;
   }
 
@@ -201,5 +262,26 @@ class ApiService {
     } catch (_) {
       return false;
     }
+  }
+
+  // ─── PUSH NOTIFICATIONS ───────────────────────────────────────────────────
+
+  // Сохранить FCM токен на сервере
+  Future<void> saveFcmToken(String token) async {
+    await _dio.post(
+      '/api/notifications/token',
+      data: {
+        'fcm_token': token,
+        'device_info': Platform.operatingSystem, // 'android' или 'ios'
+      },
+    );
+  }
+
+  // Удалить FCM токен (при логауте)
+  Future<void> deleteFcmToken(String token) async {
+    await _dio.delete(
+      '/api/notifications/token',
+      data: {'fcm_token': token},
+    );
   }
 }

@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:local_auth/local_auth.dart';
 import '../services/auth_service.dart';
 import '../services/theme_controller.dart';
+import '../widgets/loan_calculator.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -21,80 +21,9 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isStaff = false;
   String? _error;
 
-  final _localAuth = LocalAuthentication();
-  bool _hasBiometrics = false;
-  bool _hasSavedCredentials = false;
-
   @override
   void initState() {
     super.initState();
-    _checkBiometrics();
-  }
-
-  Future<void> _checkBiometrics() async {
-    try {
-      final canCheck = await _localAuth.canCheckBiometrics;
-      final isSupported = await _localAuth.isDeviceSupported();
-      if (canCheck || isSupported) {
-        final creds = await context.read<AuthService>().getSavedCredentials();
-        if (creds != null && mounted) {
-          setState(() {
-            _hasBiometrics = true;
-            _hasSavedCredentials = true;
-            // Optionally, pre-fill db and phone fields
-            _dbCtrl.text = creds['db'] ?? '';
-            _phoneCtrl.text = creds['username'] ?? '';
-            _isStaff = creds['role'] == 'staff';
-          });
-        }
-      }
-    } catch (e) {
-      // Ignore if biometrics fail to initialize
-    }
-  }
-
-  Future<void> _biometricLogin() async {
-    try {
-      final authenticated = await _localAuth.authenticate(
-        localizedReason: 'Подтвердите личность для входа',
-      );
-
-      if (authenticated) {
-        final creds = await context.read<AuthService>().getSavedCredentials();
-        if (creds != null) {
-          setState(() {
-            _loading = true;
-            _error = null;
-          });
-
-          final db = creds['db']!;
-          final user = creds['username']!;
-          final pass = creds['password']!;
-          final isStaff = creds['role'] == 'staff';
-
-          try {
-            if (isStaff) {
-              await context.read<AuthService>().staffLogin(db, user, pass);
-            } else {
-              await context.read<AuthService>().login(db, user, pass);
-            }
-            if (mounted) {
-              context.go(isStaff ? '/staff' : '/dashboard');
-            }
-          } catch (e) {
-            if (mounted) {
-              setState(() => _error = 'Ошибка авторизации. Введите пароль вручную.');
-              setState(() => _hasSavedCredentials = false);
-            }
-            await context.read<AuthService>().clearSavedCredentials();
-          } finally {
-            if (mounted) setState(() => _loading = false);
-          }
-        }
-      }
-    } catch (e) {
-      if (mounted) setState(() => _error = 'Ошибка биометрии');
-    }
   }
 
   Future<void> _login() async {
@@ -115,31 +44,13 @@ class _LoginScreenState extends State<LoginScreen> {
       if (_isStaff) {
         await context.read<AuthService>().staffLogin(db, phone, pin);
       } else {
-        if (pin.length < 4) {
-          setState(() {
-            _error = 'PIN — минимум 4 цифры';
-            _loading = false;
-          });
-          return;
-        }
         await context.read<AuthService>().login(db, phone, pin);
       }
       if (mounted) {
         context.go(_isStaff ? '/staff' : '/dashboard');
       }
     } on Exception catch (e) {
-      final msg = e.toString();
-      if (msg.contains('404')) {
-        setState(() => _error = _isStaff
-            ? 'Пользователь или организация не найдены'
-            : 'Клиент или организация не найдены');
-      } else if (msg.contains('401')) {
-        setState(() => _error = _isStaff ? 'Неверный пароль' : 'Неверный PIN');
-      } else if (msg.contains('403')) {
-        setState(() => _error = 'Доступ заблокирован');
-      } else {
-        setState(() => _error = 'Ошибка подключения к серверу');
-      }
+      setState(() => _error = 'Ошибка входа: ${e.toString()}');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -156,266 +67,107 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF0F172A), Color(0xFF1E3A5F)],
-          ),
-        ),
-        child: SafeArea(
-          child: Stack(
+      backgroundColor: const Color(0xFF0F172A),
+      resizeToAvoidBottomInset: false,
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Positioned(
-                top: 8,
-                right: 8,
-                child: IconButton(
-                  icon: Icon(
-                    context.watch<ThemeController>().isLight
-                        ? Icons.dark_mode_rounded
-                        : Icons.light_mode_rounded,
-                    color: Colors.white70,
-                  ),
-                  onPressed: () => context.read<ThemeController>().toggle(),
-                ),
-              ),
-              Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    children: [
-                      // Лого
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1A56DB),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Icon(Icons.account_balance_wallet_rounded,
-                            color: Colors.white, size: 44),
-                      ),
-                      const SizedBox(height: 20),
-                      const Text('FinCore',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 30,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2)),
-                      const SizedBox(height: 6),
-                      Text(_isStaff ? 'staff.dashboard'.tr() : 'login.title'.tr(),
-                          style:
-                              const TextStyle(color: Colors.white54, fontSize: 13)),
-                      const SizedBox(height: 20),
-
-                  // Выбор языка
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      for (final entry in [
-                        ('RU', const Locale('ru')),
-                        ('KY', const Locale('ky')),
-                        ('EN', const Locale('en')),
-                      ])
-                        TextButton(
-                          onPressed: () {
-                            EasyLocalization.of(context)!.setLocale(entry.$2);
-                          },
-                          child: Text(entry.$1,
-                              style: TextStyle(
-                                color: context.locale.languageCode ==
-                                        entry.$2.languageCode
-                                    ? Colors.white
-                                    : Colors.white38,
-                                fontWeight: context.locale.languageCode ==
-                                        entry.$2.languageCode
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                              )),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Переключатель Заемщик / Сотрудник
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ChoiceChip(
-                        label: const Text('Заёмщик'),
-                        selected: !_isStaff,
-                        onSelected: (val) => setState(() => _isStaff = false),
-                        selectedColor: const Color(0xFF1A56DB).withValues(alpha: 0.3),
-                        labelStyle: TextStyle(
-                            color: !_isStaff ? Colors.white : Colors.white54),
-                        backgroundColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                      ),
-                      const SizedBox(width: 10),
-                      ChoiceChip(
-                        label: const Text('Сотрудник'),
-                        selected: _isStaff,
-                        onSelected: (val) => setState(() => _isStaff = true),
-                        selectedColor: const Color(0xFF1A56DB).withValues(alpha: 0.3),
-                        labelStyle: TextStyle(
-                            color: _isStaff ? Colors.white : Colors.white54),
-                        backgroundColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  _field(
-                    ctrl: _dbCtrl,
-                    label: 'login.org_code'.tr(),
-                    hint: 'login.org_code_hint'.tr(),
-                    icon: Icons.business,
-                  ),
-                  if (!_isStaff) ...[
-                    const SizedBox(height: 4),
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '  Код выдаётся сотрудником МФО',
-                        style: TextStyle(color: Colors.white24, fontSize: 11),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 14),
-                  _field(
-                    ctrl: _phoneCtrl,
-                    label: _isStaff ? 'Логин' : 'login.phone'.tr(),
-                    icon: _isStaff ? Icons.person : Icons.phone,
-                    type: _isStaff ? TextInputType.text : TextInputType.phone,
-                  ),
-                  const SizedBox(height: 14),
-                  _field(
-                    ctrl: _pinCtrl,
-                    label: _isStaff ? 'Пароль' : 'login.pin'.tr(),
-                    icon: Icons.lock,
-                    obscure: true,
-                    type: _isStaff ? TextInputType.text : TextInputType.number,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Ошибка
-                  if (_error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                              color: Colors.redAccent.withValues(alpha: 0.4)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.error_outline,
-                                color: Colors.redAccent, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                                child: Text(_error!,
-                                    style: const TextStyle(
-                                        color: Colors.redAccent,
-                                        fontSize: 13))),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                  // Кнопка Войти и Биометрия
-                  Row(
-                    children: [
-                      Expanded(
-                        child: SizedBox(
-                          height: 52,
-                          child: ElevatedButton(
-                            onPressed: _loading ? null : _login,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1A56DB),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14)),
-                              elevation: 0,
-                            ),
-                            child: _loading
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                        color: Colors.white, strokeWidth: 2))
-                                : Text('login.button'.tr(),
-                                    style: const TextStyle(
-                                        fontSize: 16, fontWeight: FontWeight.w600)),
-                          ),
-                        ),
-                      ),
-                      if (_hasBiometrics && _hasSavedCredentials) ...[
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          height: 52,
-                          width: 52,
-                          child: ElevatedButton(
-                            onPressed: _loading ? null : _biometricLogin,
-                            style: ElevatedButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              backgroundColor: Colors.white.withValues(alpha: 0.1),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14)),
-                              elevation: 0,
-                            ),
-                            child: const Icon(Icons.fingerprint, size: 28),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+              const Icon(Icons.account_balance_wallet, size: 64, color: Color(0xFF1A56DB)),
+              const SizedBox(height: 24),
+              const Text('AURUM / FinCore', 
+                style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 48),
+              
+              // Переключатель Заемщик / Сотрудник
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _roleBtn(false, 'Заёмщик'),
+                  const SizedBox(width: 12),
+                  _roleBtn(true, 'Сотрудник'),
                 ],
               ),
-            ),
+              const SizedBox(height: 32),
+
+              _field(ctrl: _dbCtrl, label: 'Код организации', icon: Icons.business),
+              const SizedBox(height: 16),
+              _field(ctrl: _phoneCtrl, label: 'Логин / Телефон', icon: Icons.person),
+              const SizedBox(height: 16),
+              _field(ctrl: _pinCtrl, label: 'Пароль / PIN', icon: Icons.lock, obscure: true),
+              const SizedBox(height: 32),
+
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _loading ? null : _login,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1A56DB),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: _loading 
+                    ? const CircularProgressIndicator(color: Colors.white) 
+                    : const Text('ВОЙТИ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              
+              if (_error != null) ...[
+                const SizedBox(height: 16),
+                Text(_error!, style: const TextStyle(color: Colors.redAccent, fontSize: 13), textAlign: TextAlign.center),
+              ],
+
+              const SizedBox(height: 40),
+              TextButton.icon(
+                onPressed: () => LoanCalculator.show(context),
+                icon: const Icon(Icons.calculate, color: Colors.white54),
+                label: const Text('Калькулятор займа', style: TextStyle(color: Colors.white54)),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
-    ),
-  ),
-);
-}
+    );
+  }
+
+  Widget _roleBtn(bool staff, String label) {
+    final active = _isStaff == staff;
+    return GestureDetector(
+      onTap: () => setState(() => _isStaff = staff),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFF1A56DB) : Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(label, style: TextStyle(color: active ? Colors.white : Colors.white54)),
+      ),
+    );
+  }
 
   Widget _field({
     required TextEditingController ctrl,
     required String label,
     required IconData icon,
-    String? hint,
     bool obscure = false,
-    TextInputType type = TextInputType.text,
   }) {
     return TextField(
       controller: ctrl,
       obscureText: obscure,
-      keyboardType: type,
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         labelText: label,
-        hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
         labelStyle: const TextStyle(color: Colors.white54),
         prefixIcon: Icon(icon, color: Colors.white38),
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.07),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none),
+        fillColor: Colors.white.withOpacity(0.05),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFF1A56DB), width: 2)),
+          borderRadius: BorderRadius.circular(12), 
+          borderSide: const BorderSide(color: Color(0xFF1A56DB), width: 2)
+        ),
       ),
     );
   }

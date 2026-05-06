@@ -137,6 +137,11 @@ class AppTheme {
           ),
         ),
       ),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: vsBlue,
+        selectionColor: vsBlue.withOpacity(0.2),
+        selectionHandleColor: vsBlue,
+      ),
       // ── Поля ввода ────────────────────────────────────────────────────────
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -363,6 +368,11 @@ class AppTheme {
       colorScheme: ColorScheme.fromSeed(
         seedColor: seed,
         brightness: Brightness.dark,
+      ),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: const Color(0xFF3B82F6),
+        selectionColor: const Color(0xFF3B82F6).withOpacity(0.3),
+        selectionHandleColor: const Color(0xFF3B82F6),
       ),
     );
   }
