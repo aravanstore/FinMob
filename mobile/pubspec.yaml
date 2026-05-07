@@ -46,8 +46,12 @@ dependencies:
   image_picker: ^1.2.2
   google_mlkit_text_recognition: ^0.15.1
   nfc_manager: ^3.3.0
-  pointycastle: ^4.0.0
+  pointycastle: 3.7.3
   crypto: ^3.0.6
+  dmrtd:
+    git:
+      url: https://github.com/ZeroPass/dmrtd.git
+      ref: master
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -58,3 +62,6 @@ flutter:
   assets:
     - assets/images/
     - assets/translations/
+
+dependency_overrides:
+  pointycastle: 3.7.3
