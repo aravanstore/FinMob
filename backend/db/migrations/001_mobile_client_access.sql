@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS mobile_client_access (
   access_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   client_id   UUID NOT NULL,
-  phone       VARCHAR(50) UNIQUE NOT NULL,  -- должен совпадать с clients.phone_main
+  phone       VARCHAR(50) UNIQUE NOT NULL,  -- Логин клиента (теперь используется ИНН)
   pin_hash    TEXT NOT NULL,                 -- bcrypt hash
   is_active   BOOLEAN DEFAULT TRUE,
   created_at  TIMESTAMP DEFAULT NOW(),

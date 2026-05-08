@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
 import '../../services/api_service.dart';
@@ -239,10 +240,30 @@ class _IssueLoanScreenState extends State<IssueLoanScreen> {
                       children: [
                         Row(
                           children: [
-                            CircleAvatar(
-                              backgroundColor: pal.accent,
-                              child:
-                                  const Icon(Icons.person, color: Colors.white),
+                            GestureDetector(
+                              onTap: _selectedClient!['photo_base64'] != null 
+                                ? () => _showFullScreenPhoto(context, _selectedClient!['photo_base64']) 
+                                : null,
+                              child: Hero(
+                                tag: 'client_photo_hero',
+                                child: Container(
+                                  width: 60,
+                                  height: 60,
+                                  decoration: BoxDecoration(
+                                    color: pal.accent,
+                                    borderRadius: BorderRadius.circular(12),
+                                    image: _selectedClient!['photo_base64'] != null 
+                                      ? DecorationImage(
+                                          image: MemoryImage(base64Decode(_selectedClient!['photo_base64'])),
+                                          fit: BoxFit.cover,
+                                        ) 
+                                      : null,
+                                  ),
+                                  child: _selectedClient!['photo_base64'] == null 
+                                    ? const Icon(Icons.person, color: Colors.white, size: 30) 
+                                    : null,
+                                ),
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -546,6 +567,17 @@ class _IssueLoanScreenState extends State<IssueLoanScreen> {
 
     if (selected != null && mounted) {
       setState(() => _selectedClient = selected);
+      
+      // Асинхронно подгружаем фото и другие детали
+      try {
+        final fullDetails = await api.getClientDetails(selected['client_id'].toString());
+        if (mounted) {
+          // ВАЖНО: берем объект 'client' из ответа сервера
+          setState(() => _selectedClient = fullDetails['client']);
+        }
+      } catch (e) {
+        debugPrint('Error fetching full client details: $e');
+      }
     }
   }
 
@@ -733,6 +765,25 @@ class _ClientPickerDialogState extends State<_ClientPickerDialog> {
       ),
     );
   }
+}
+
+void _showFullScreenPhoto(BuildContext context, String base64) {
+  showDialog(
+    context: context,
+    builder: (context) => GestureDetector(
+      onTap: () => Navigator.pop(context),
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: InteractiveViewer(
+          child: Image.memory(
+            base64Decode(base64),
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _SummaryRow extends StatelessWidget {

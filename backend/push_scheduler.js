@@ -89,7 +89,6 @@ async function processTenant(dbName, tenantName) {
       SELECT DISTINCT
         l.client_id,
         l.contract_number,
-        l.monthly_payment,
         l.next_payment_date,
         CASE 
           WHEN l.next_payment_date = CURRENT_DATE THEN 'today'
@@ -116,21 +115,16 @@ async function processTenant(dbName, tenantName) {
       );
       if (!tokenRows.length) continue;
 
-      // Формируем текст уведомления
-      const amount = payment.monthly_payment
-        ? `${Number(payment.monthly_payment).toLocaleString('ru')} сом`
-        : '';
-
       let title, body;
       if (payment.reminder_type === 'today') {
         title = '💳 Платёж сегодня!';
-        body  = `По договору ${payment.contract_number} — ${amount}. Оплатите до конца дня.`;
+        body  = `По договору ${payment.contract_number}. Оплатите до конца дня.`;
       } else if (payment.reminder_type === '1day') {
         title = '⏰ Платёж завтра';
-        body  = `По договору ${payment.contract_number} — ${amount}. Не забудьте оплатить.`;
+        body  = `По договору ${payment.contract_number}. Не забудьте оплатить.`;
       } else {
         title = '📅 Напоминание о платеже';
-        body  = `Через 3 дня платёж по договору ${payment.contract_number} — ${amount}.`;
+        body  = `Через 3 дня платёж по договору ${payment.contract_number}.`;
       }
 
       // Отправляем на каждое устройство клиента

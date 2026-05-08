@@ -25,6 +25,7 @@ import 'screens/staff/issue_loan_screen.dart';
 import 'screens/staff/visits_screen.dart';
 import 'screens/staff/client_registration_screen.dart';
 import 'screens/inquiry_screen.dart';
+import 'screens/notifications_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -62,7 +63,11 @@ void main() async {
   );
   
   // Инициализируем данные уже после того, как приложение отрисовало первый кадр
-  authService.init();
+  await authService.init();
+  if (authService.isLoggedIn) {
+    // Если залогинены — принудительно обновляем токен на сервере при старте
+    PushNotificationService.registerToken(apiService);
+  }
 }
 
 class FinCoreApp extends StatefulWidget {
@@ -135,6 +140,10 @@ class _FinCoreAppState extends State<FinCoreApp> {
           builder: (_, __) => const InquiryScreen(),
         ),
         GoRoute(
+          path: '/notifications',
+          builder: (_, __) => const NotificationsScreen(),
+        ),
+        GoRoute(
           path: '/staff/journal',
           builder: (_, __) => const JournalScreen(),
         ),
@@ -145,6 +154,16 @@ class _FinCoreAppState extends State<FinCoreApp> {
         GoRoute(
           path: '/staff/register-client',
           builder: (_, __) => const ClientRegistrationScreen(),
+        ),
+        GoRoute(
+          path: '/staff/client/:clientId/update-passport',
+          builder: (_, state) {
+            final extra = state.extra as Map<String, dynamic>?;
+            return ClientRegistrationScreen(
+              clientId: state.pathParameters['clientId'],
+              initialData: extra?['client'],
+            );
+          },
         ),
         GoRoute(
           path: '/staff/issue-loan',
@@ -162,6 +181,13 @@ class _FinCoreAppState extends State<FinCoreApp> {
         return null;
       },
     );
+
+    // Переход в историю уведомлений при клике на Push
+    PushNotificationService.onNotificationClick = (message) {
+      if (auth.isLoggedIn) {
+        _router.push('/notifications');
+      }
+    };
   }
 
   @override

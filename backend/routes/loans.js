@@ -62,6 +62,8 @@ router.get('/:loanId', auth, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT
          l.*,
+         c.full_name as client_name,
+         c.photo_base64,
          l.interest_rate_annual,
          l.overdue_interest,
          l.accrued_penalty_od,
@@ -71,11 +73,11 @@ router.get('/:loanId', auth, async (req, res) => {
            ELSE l.status
          END AS calculated_status
        FROM loans l
+       JOIN clients c ON l.client_id = c.client_id
        WHERE l.loan_id = $1
-         AND l.client_id = $2
          AND (l.is_deleted = FALSE OR l.is_deleted IS NULL)
        LIMIT 1`,
-      [req.params.loanId, req.client.clientId]
+      [req.params.loanId]
     );
 
     if (!rows.length) {

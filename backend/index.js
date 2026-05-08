@@ -5,7 +5,7 @@ require('./push_scheduler'); // запускает cron каждый день в
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 app.use((req, res, next) => {
   const fs = require('fs');
@@ -30,6 +30,7 @@ app.use('/api/payments', require('./routes/payments'));
 app.use('/api/inquiries', require('./routes/inquiries'));
 app.use('/api/announcements', require('./routes/announcements'));
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/chat', require('./routes/chat'));
 
 // Сотрудники: ТОЛЬКО ЧТЕНИЕ (read-only)
 // Правило безопасности: мобильный может попасть в чужие руки.

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
+import 'dart:convert';
 import '../../services/api_service.dart';
 import '../../services/theme_controller.dart';
 import '../../theme/app_theme.dart';
@@ -35,6 +36,18 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
         backgroundColor: pal.bg,
         title: Text('Профиль клиента', style: TextStyle(color: pal.textPri)),
         iconTheme: IconThemeData(color: pal.textPri),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner),
+            tooltip: 'Обновить паспортные данные',
+            onPressed: () {
+              // Передаем текущие данные клиента для предзаполнения
+              _detailsFuture.then((data) {
+                context.push('/staff/client/${widget.clientId}/update-passport', extra: {'client': data['client']});
+              });
+            },
+          ),
+        ],
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _detailsFuture,
@@ -66,16 +79,57 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(client['full_name'] ?? 'Без имени',
-                        style: TextStyle(
-                            color: pal.textPri,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold)),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (client['photo_base64'] != null)
+                          GestureDetector(
+                            onTap: () => _showFullScreenPhoto(context, client['photo_base64']),
+                            child: Hero(
+                              tag: 'client_photo_details',
+                              child: Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  image: DecorationImage(
+                                    image: MemoryImage(base64Decode(client['photo_base64'])),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: pal.accent.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Icon(Icons.person, color: pal.accent, size: 40),
+                          ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(client['full_name'] ?? 'Без имени',
+                                  style: TextStyle(
+                                      color: pal.textPri,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+                              _infoRow(Icons.phone, client['phone_main'] ?? '-'),
+                              _infoRow(Icons.badge, 'ИНН: ${client['inn'] ?? '-'}'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 8),
-                    _infoRow(Icons.phone, client['phone_main'] ?? '-'),
-                    _infoRow(Icons.badge, 'ИНН: ${client['inn'] ?? '-'}'),
-                    _infoRow(
-                        Icons.location_on, client['address_factual'] ?? '-'),
+                    _infoRow(Icons.location_on, client['address_factual'] ?? '-'),
                   ],
                 ),
               ),
@@ -306,6 +360,49 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
           Text('Остаток основного долга',
               style: TextStyle(color: pal.textHint, fontSize: 11)),
         ],
+      ),
+    );
+  }
+
+  void _showFullScreenPhoto(BuildContext context, String base64) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                color: Colors.black.withOpacity(0.85),
+                width: double.infinity,
+                height: double.infinity,
+              ),
+            ),
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Hero(
+                tag: 'client_photo_details',
+                child: Image.memory(
+                  base64Decode(base64),
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 40,
+              right: 20,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

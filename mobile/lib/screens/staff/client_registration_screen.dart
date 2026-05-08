@@ -4,16 +4,20 @@ import 'client_registration_screen_old.dart';
 import 'client_registration_screen_new.dart';
 
 class ClientRegistrationScreen extends StatelessWidget {
-  const ClientRegistrationScreen({super.key});
+  final String? clientId;
+  final Map<String, dynamic>? initialData;
+  const ClientRegistrationScreen({super.key, this.clientId, this.initialData});
 
   @override
   Widget build(BuildContext context) {
     final pal = AppPalette.of(context);
+    final bool isUpdate = clientId != null;
+
     return Scaffold(
       backgroundColor: pal.bg,
       appBar: AppBar(
         backgroundColor: pal.bg,
-        title: Text('Регистрация', style: TextStyle(color: pal.textPri)),
+        title: Text(isUpdate ? 'Обновление данных' : 'Регистрация', style: TextStyle(color: pal.textPri)),
         iconTheme: IconThemeData(color: pal.textPri),
       ),
       body: Center(
@@ -30,7 +34,7 @@ class ClientRegistrationScreen extends StatelessWidget {
                 color: Colors.green,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const ClientRegistrationScreenOld()),
+                  MaterialPageRoute(builder: (_) => ClientRegistrationScreenOld(clientId: clientId, initialData: initialData)),
                 ),
               ),
               const SizedBox(height: 24),
@@ -42,7 +46,7 @@ class ClientRegistrationScreen extends StatelessWidget {
                 color: Colors.deepPurple,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const ClientRegistrationScreenNew()),
+                  MaterialPageRoute(builder: (_) => ClientRegistrationScreenNew(clientId: clientId, initialData: initialData)),
                 ),
               ),
             ],

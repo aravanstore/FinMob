@@ -15,7 +15,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _dbCtrl = TextEditingController();
+  final _dbCtrl = TextEditingController(text: 'aravan_bbd');
   final _phoneCtrl = TextEditingController();
   final _pinCtrl = TextEditingController();
   bool _loading = false;
@@ -99,7 +99,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
               _field(ctrl: _dbCtrl, label: 'Код организации', icon: Icons.business),
               const SizedBox(height: 16),
-              _field(ctrl: _phoneCtrl, label: 'Логин / Телефон', icon: Icons.person),
+              _field(
+                ctrl: _phoneCtrl, 
+                label: _isStaff ? 'Логин' : 'ИНН', 
+                icon: Icons.person
+              ),
               const SizedBox(height: 16),
               _field(ctrl: _pinCtrl, label: 'Пароль / PIN', icon: Icons.lock, obscure: true),
               const SizedBox(height: 32),

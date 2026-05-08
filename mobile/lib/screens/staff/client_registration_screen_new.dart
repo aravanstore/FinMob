@@ -22,7 +22,9 @@ import 'package:logging/logging.dart';
 import 'bac_crypto.dart';
 
 class ClientRegistrationScreenNew extends StatefulWidget {
-  const ClientRegistrationScreenNew({super.key});
+  final String? clientId;
+  final Map<String, dynamic>? initialData;
+  const ClientRegistrationScreenNew({super.key, this.clientId, this.initialData});
   @override
   State<ClientRegistrationScreenNew> createState() => _ClientRegistrationScreenNewState();
 }
@@ -59,6 +61,34 @@ class _ClientRegistrationScreenNewState extends State<ClientRegistrationScreenNe
   final List<String> _familyStatuses = ['Не женат/Не замужем', 'Женат/Замужем', 'В разводе', 'Вдовец/Вдова'];
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.initialData != null) {
+      final d = widget.initialData!;
+      _fullNameCtrl.text = d['full_name'] ?? '';
+      _innCtrl.text = d['inn'] ?? '';
+      _dobCtrl.text = d['date_of_birth'] != null ? d['date_of_birth'].toString().substring(0, 10).split('-').reversed.join('.') : '';
+      _passSeriesCtrl.text = d['passport_series'] ?? 'ID';
+      _passNumberCtrl.text = d['passport_number'] ?? '';
+      _passIssuedByCtrl.text = d['passport_issued_by'] ?? '';
+      _passIssuedDateCtrl.text = d['passport_issued_date'] != null ? d['passport_issued_date'].toString().substring(0, 10).split('-').reversed.join('.') : '';
+      _passExpiryDateCtrl.text = d['passport_expiry_date'] != null ? d['passport_expiry_date'].toString().substring(0, 10).split('-').reversed.join('.') : '';
+      _addressRegCtrl.text = d['address_registration'] ?? '';
+      _addressFactCtrl.text = d['address_factual'] ?? '';
+      _phoneMainCtrl.text = d['phone_main'] ?? '+996';
+      _phoneExtraCtrl.text = d['phone_extra'] ?? '';
+      _emailCtrl.text = d['email'] ?? '';
+      _workplaceCtrl.text = d['workplace'] ?? '';
+      _positionCtrl.text = d['position'] ?? '';
+      _incomeCtrl.text = (d['monthly_income'] ?? '').toString();
+      _notesCtrl.text = d['notes'] ?? '';
+      if (d['gender'] != null) _gender = d['gender'];
+      if (d['family_status'] != null) _familyStatus = d['family_status'];
+      if (d['rural_office'] != null) _ruralOffice = d['rural_office'];
+    }
+  }
+
+  @override
   void dispose() {
     _fullNameCtrl.dispose(); _innCtrl.dispose(); _dobCtrl.dispose(); _passNumberCtrl.dispose();
     _passIssuedByCtrl.dispose(); _passIssuedDateCtrl.dispose(); _passExpiryDateCtrl.dispose();
@@ -82,6 +112,16 @@ class _ClientRegistrationScreenNewState extends State<ClientRegistrationScreenNe
   String _capitalizeWords(String text) {
     if (text.isEmpty) return text;
     return text.split(' ').where((s) => s.isNotEmpty).map((word) => word[0].toUpperCase() + word.substring(1).toLowerCase()).join(' ');
+  }
+
+  String _formatToDbDate(String dateStr) {
+    if (dateStr.isEmpty) return '';
+    final parts = dateStr.split('.');
+    if (parts.length == 3) {
+      // DD.MM.YYYY -> YYYY-MM-DD
+      return '${parts[2]}-${parts[1]}-${parts[0]}';
+    }
+    return dateStr;
   }
 
   int _calculateCheckDigit(String data) {
@@ -160,6 +200,32 @@ class _ClientRegistrationScreenNewState extends State<ClientRegistrationScreenNe
     return allBytes.isNotEmpty ? Uint8List.fromList(allBytes) : null;
   }
 
+  void _setSmartFullName(String newName) {
+    final oldName = _fullNameCtrl.text.trim();
+    if (oldName.isEmpty) {
+      _fullNameCtrl.text = newName;
+      return;
+    }
+
+    final oldWords = oldName.split(RegExp(r'\s+'));
+    final newWords = newName.split(RegExp(r'\s+'));
+
+    // Если в старом имени больше слов (есть отчество), а новое — это лишь начало старого,
+    // то не затираем, так как старое имя полнее.
+    if (oldWords.length > newWords.length) {
+      bool isPrefix = true;
+      for (int i = 0; i < newWords.length; i++) {
+        if (oldWords[i].toLowerCase() != newWords[i].toLowerCase()) {
+          isPrefix = false;
+          break;
+        }
+      }
+      if (isPrefix) return; 
+    }
+
+    _fullNameCtrl.text = newName;
+  }
+
   void _applyMrzData(dynamic mrz) {
     setState(() {
       try {
@@ -168,7 +234,18 @@ class _ClientRegistrationScreenNewState extends State<ClientRegistrationScreenNe
         if (sName.isNotEmpty || gNames.isNotEmpty) {
           String fullLat = '$sName $gNames'.trim();
           String cyr = _capitalizeWords(_transliterateToCyrillic(fullLat));
-          _fullNameCtrl.text = cyr.replaceAll(RegExp(r'KGZ|PASSPORT|ID|КЫРГЫЗ|CARD', caseSensitive: false), '').trim();
+          String cleanCyr = cyr.replaceAll(RegExp(r'KGZ|PASSPORT|ID|КЫРГЫЗ|CARD', caseSensitive: false), '').trim();
+          
+          // Только если ФИО ещё пустое, состоит из латиницы, или выглядит как мусор от OCR
+          bool isGarbage = _fullNameCtrl.text.length > 45 || 
+                           _fullNameCtrl.text.split(RegExp(r'\s+')).length > 4 ||
+                           RegExp(r'[A-Za-z0-9]').hasMatch(_fullNameCtrl.text);
+
+          if (_fullNameCtrl.text.isEmpty || 
+              !RegExp(r'[А-Яа-я]').hasMatch(_fullNameCtrl.text) || 
+              isGarbage) {
+            _fullNameCtrl.text = cleanCyr;
+          }
         }
 
         String docRaw = (mrz.documentNumber ?? '').toString()
@@ -343,7 +420,7 @@ class _ClientRegistrationScreenNewState extends State<ClientRegistrationScreenNe
         if (dg11.nameOfHolder != null && dg11.nameOfHolder!.isNotEmpty) {
           final name = dg11.nameOfHolder!.replaceAll('<', ' ').trim();
           if (name.isNotEmpty && mounted) {
-            setState(() => _fullNameCtrl.text = _capitalizeWords(name));
+            _setSmartFullName(_capitalizeWords(name));
             log += '👤 DG11 OK\n';
           }
         }
@@ -360,7 +437,8 @@ class _ClientRegistrationScreenNewState extends State<ClientRegistrationScreenNe
       try { await nfc.disconnect(); } catch (_) {}
       if (mounted) {
         setState(() => _isLoading = false); Navigator.of(scanCtx, rootNavigator: true).pop();
-        showDialog(context: context, builder: (_) => AlertDialog(title: Text(success ? '✅ Успех' : '⚠ Ошибка'), content: SingleChildScrollView(child: Text(log)), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))]));
+        String photoStatus = _nfcPhoto != null ? "✅ Фото из чипа извлечено (${_nfcPhoto!.length} байт)" : "⚠ Фото в чипе не найдено";
+        showDialog(context: context, builder: (_) => AlertDialog(title: Text(success ? '✅ Успех' : '⚠ Ошибка'), content: SingleChildScrollView(child: Text("$log\n$photoStatus")), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))]));
       }
     }
   }
@@ -410,11 +488,12 @@ class _ClientRegistrationScreenNewState extends State<ClientRegistrationScreenNe
           final dg13 = await _readFileSecure(dynTech, session, [0x01, 0x0D]);
           if (dg13 != null) { log += "📝 DG13 OK\n"; _tryParseDg13(dg13); }
         } catch (e) { log += "❌ Error: $e\n"; }
-        finally {
+          finally {
           NfcManager.instance.stopSession();
           if (mounted) {
             setState(() => _isLoading = false); Navigator.of(scanCtx, rootNavigator: true).pop();
-            showDialog(context: context, builder: (_) => AlertDialog(title: Text(success ? '✅ Готово' : '⚠ Ошибка'), content: SingleChildScrollView(child: Text(log)), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))]));
+            String photoStatus = _nfcPhoto != null ? "✅ Фото из чипа извлечено (${_nfcPhoto!.length} байт)" : "⚠ Фото в чипе не найдено";
+            showDialog(context: context, builder: (_) => AlertDialog(title: Text(success ? '✅ Готово' : '⚠ Ошибка'), content: SingleChildScrollView(child: Text("$log\n$photoStatus")), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))]));
           }
         }
       });
@@ -446,10 +525,11 @@ class _ClientRegistrationScreenNewState extends State<ClientRegistrationScreenNe
       
       String? cyrName, detInn, detDob, detAuth, rDoc, rDob, rExp;
       
+      List<String> allText = [];
       for (TextBlock b in frontText.blocks) {
         for (TextLine l in b.lines) {
+          allText.add(l.text.trim());
           final t = l.text.trim();
-          // Более гибкий поиск: минимум 3 буквы, только кириллица, пробелы и дефисы
           if (RegExp(r'^[А-ЯЁ\s-]{3,}$').hasMatch(t) && 
               !t.contains('КЫРГЫЗ') && 
               !t.contains('ПАСПОРТ') &&
@@ -457,6 +537,15 @@ class _ClientRegistrationScreenNewState extends State<ClientRegistrationScreenNe
               !t.contains('ID')) {
             if (cyrName == null || t.length > cyrName.length) cyrName = t;
           }
+        }
+      }
+
+      if (cyrName != null) {
+        _setSmartFullName(_capitalizeWords(cyrName));
+      } else {
+        String combined = allText.join(' ');
+        if (!(combined.contains('КЫРГЫЗ') || combined.contains('РЕСПУБЛИКАСЫ'))) {
+          _setSmartFullName(_capitalizeWords(combined));
         }
       }
 
@@ -485,7 +574,7 @@ class _ClientRegistrationScreenNewState extends State<ClientRegistrationScreenNe
 
       setState(() {
         _nfcRawDoc = rDoc; _nfcRawDob = rDob; _nfcRawExp = rExp;
-        if (cyrName != null) _fullNameCtrl.text = _capitalizeWords(cyrName);
+        if (cyrName != null) _setSmartFullName(_capitalizeWords(cyrName));
         if (detInn != null) {
           _innCtrl.text = detInn;
           detDob = "${detInn!.substring(1,3)}.${detInn.substring(3,5)}.${detInn.substring(5,9)}";
@@ -532,25 +621,88 @@ class _ClientRegistrationScreenNewState extends State<ClientRegistrationScreenNe
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     try {
-      final data = {
-        'full_name': _fullNameCtrl.text, 'inn': _innCtrl.text, 'status': 'Активен', 'registration_date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
-        'client_type': _clientType, 'gender': _gender, 'date_of_birth': _dobCtrl.text, 'passport_series': _passSeriesCtrl.text, 'passport_number': _passNumberCtrl.text,
-        'passport_issued_by': _passIssuedByCtrl.text, 'passport_issued_date': _passIssuedDateCtrl.text, 'passport_expiry_date': _passExpiryDateCtrl.text,
-        'citizenship': 'Кыргызстан', 'address_registration': _addressRegCtrl.text, 'rural_office': _ruralOffice,
-        'address_factual': _addressFactCtrl.text.isEmpty ? _addressRegCtrl.text : _addressFactCtrl.text, 'phone_main': _phoneMainCtrl.text,
-        'phone_extra': _phoneExtraCtrl.text, 'email': _emailCtrl.text, 'workplace': _workplaceCtrl.text, 'position': _positionCtrl.text,
-        'monthly_income': double.tryParse(_incomeCtrl.text) ?? 0, 'family_status': _familyStatus, 'notes': _notesCtrl.text,
+      final Map<String, dynamic> data = {
+        'full_name': _fullNameCtrl.text, 
+        'inn': _innCtrl.text, 
+        'gender': _gender, 
+        'date_of_birth': _formatToDbDate(_dobCtrl.text), 
+        'passport_series': _passSeriesCtrl.text, 
+        'passport_number': _passNumberCtrl.text,
+        'passport_issued_by': _passIssuedByCtrl.text, 
+        'passport_issued_date': _formatToDbDate(_passIssuedDateCtrl.text), 
+        'passport_expiry_date': _formatToDbDate(_passExpiryDateCtrl.text),
+        if (_nfcPhoto != null) 'photo_base64': base64Encode(_nfcPhoto!),
       };
-      await _api.createClient(data);
-      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Успех'), backgroundColor: Colors.green)); Navigator.pop(context); }
-    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red)); } finally { if (mounted) setState(() => _isLoading = false); }
+
+      if (widget.clientId != null) {
+        await _api.updateClient(widget.clientId!, data);
+      } else {
+        // Добавляем поля только для регистрации
+        data.addAll({
+          'status': 'Активен', 
+          'registration_date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
+          'client_type': _clientType,
+          'citizenship': 'Кыргызстан', 
+          'address_registration': _addressRegCtrl.text, 
+          'rural_office': _ruralOffice,
+          'address_factual': _addressFactCtrl.text.isEmpty ? _addressRegCtrl.text : _addressFactCtrl.text, 
+          'phone_main': _phoneMainCtrl.text,
+          'phone_extra': _phoneExtraCtrl.text, 
+          'email': _emailCtrl.text, 
+          'workplace': _workplaceCtrl.text, 
+          'position': _positionCtrl.text,
+          'monthly_income': double.tryParse(_incomeCtrl.text) ?? 0, 
+          'family_status': _familyStatus, 
+          'notes': _notesCtrl.text,
+        });
+        await _api.createClient(data);
+      }
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Text('✅ Успех'),
+            content: Text(widget.clientId != null ? 'Данные паспорта и фото обновлены.' : 'Клиент успешно сохранен в базе данных.'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx); // закрыть диалог
+                  Navigator.pop(context); // закрыть экран регистрации
+                  if (widget.clientId != null) Navigator.pop(context); // закрыть экран выбора паспорта
+                },
+                child: const Text('ОК'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('❌ Ошибка сохранения'),
+            content: Text(e.toString()),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Закрыть')),
+            ],
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final pal = AppPalette.of(context);
     return Scaffold(
-      backgroundColor: pal.bg, appBar: AppBar(backgroundColor: pal.bg, title: Text('Регистрация', style: TextStyle(color: pal.textPri)), iconTheme: IconThemeData(color: pal.textPri)),
+      backgroundColor: pal.bg, appBar: AppBar(backgroundColor: pal.bg, title: Text(widget.clientId != null ? 'Обновление паспорта' : 'Регистрация', style: TextStyle(color: pal.textPri)), iconTheme: IconThemeData(color: pal.textPri)),
       body: Stack(children: [
         Form(key: _formKey, child: ListView(padding: const EdgeInsets.all(16), children: [
           _buildHeader(pal), const SizedBox(height: 24), _buildSectionTitle(pal, 'Инфо'),
@@ -565,10 +717,11 @@ class _ClientRegistrationScreenNewState extends State<ClientRegistrationScreenNe
           _buildTextField(pal, _passExpiryDateCtrl, 'Срок', Icons.event_busy),
           const SizedBox(height: 24), _buildSectionTitle(pal, 'Контакты'),
           _buildTextField(pal, _phoneMainCtrl, 'Телефон', Icons.phone, required: true),
-          _buildTextField(pal, _addressRegCtrl, 'Адрес прописки', Icons.home),
+          _buildTextField(pal, _addressRegCtrl, 'Адрес прописки', Icons.home, required: true),
+          _buildTextField(pal, _addressFactCtrl, 'Адрес проживания (факт.)', Icons.map, required: true),
           _buildDropdown(pal, 'Айыл окмоту', _ruralOffice, _ruralOffices, (v) => setState(() => _ruralOffice = v!)),
           const SizedBox(height: 32),
-          ElevatedButton(onPressed: _isLoading ? null : _save, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 54)), child: const Text('Сохранить')),
+          ElevatedButton(onPressed: _isLoading ? null : _save, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 54)), child: Text(widget.clientId != null ? 'Обновить данные' : 'Сохранить')),
         ])),
         if (_isLoading) Container(color: Colors.black26, child: const Center(child: CircularProgressIndicator())),
       ]),
@@ -593,12 +746,44 @@ class _ClientRegistrationScreenNewState extends State<ClientRegistrationScreenNe
         label: const Text('NFC (Новый 2024+)'),
         style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, minimumSize: const Size(double.infinity, 44)),
       ),
+      const SizedBox(height: 12),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            _nfcPhoto != null ? Icons.check_circle : Icons.error_outline,
+            color: _nfcPhoto != null ? Colors.green : Colors.red,
+            size: 16,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            _nfcPhoto != null ? 'Фото из чипа загружено' : 'Фото из чипа отсутствует',
+            style: TextStyle(
+              color: _nfcPhoto != null ? Colors.green : Colors.red,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
     ]));
   }
 
   Widget _buildSectionTitle(AppPalette pal, String title) { return Padding(padding: const EdgeInsets.only(bottom: 16), child: Text(title, style: TextStyle(color: pal.textPri, fontSize: 17, fontWeight: FontWeight.bold))); }
   Widget _buildTextField(AppPalette pal, TextEditingController ctrl, String label, IconData icon, { bool required = false, int? maxLength }) {
-    return Padding(padding: const EdgeInsets.only(bottom: 16), child: TextFormField(controller: ctrl, maxLength: maxLength, decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon), border: const OutlineInputBorder())));
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: TextFormField(
+        controller: ctrl, 
+        maxLength: maxLength, 
+        validator: required ? (v) => (v == null || v.trim().isEmpty) ? 'Обязательное поле' : null : null,
+        decoration: InputDecoration(
+          labelText: required ? '$label *' : label, 
+          prefixIcon: Icon(icon), 
+          border: const OutlineInputBorder()
+        )
+      )
+    );
   }
   Widget _buildDropdown(AppPalette pal, String label, String value, List<String> items, Function(String?) onChanged) {
     return Padding(padding: const EdgeInsets.only(bottom: 16), child: DropdownButtonFormField<String>(value: value, items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: onChanged, decoration: InputDecoration(labelText: label, border: const OutlineInputBorder())));

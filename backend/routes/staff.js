@@ -20,8 +20,18 @@ const getPool = (req) => getTenantPool(req.client.dbName);
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/clients', auth, staffOnly, async (req, res) => {
   try {
-    const pool = getPool(req);
     const data = req.body;
+    if (data.photo_base64) {
+      console.log(`[POST /clients] Получено фото: ${data.photo_base64.length} символов (base64)`);
+    } else {
+      console.log(`[POST /clients] Фото НЕ получено`);
+    }
+    const pool = getPool(req);
+
+    // Маппинг типа клиента для ENUM в базе данных
+    let clientType = data.client_type || 'individual';
+    if (clientType === 'Физ. лицо') clientType = 'individual';
+    if (clientType === 'Юр. лицо')  clientType = 'legal_entity';
 
     const fioEnc = encryptData(data.full_name);
     const innEnc = encryptData(data.inn);
@@ -37,11 +47,11 @@ router.post('/clients', auth, staffOnly, async (req, res) => {
         phone_main, phone_extra, email, workplace, position,
         experience_months, monthly_income, family_status, spouse_name,
         dependents, related_person, uku_sheet, ukz_sheet, notes,
-        fio_encrypted, inn_encrypted, fio_bindex, inn_bindex
+        fio_encrypted, inn_encrypted, fio_bindex, inn_bindex, photo_base64
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 
         $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-        $31, $32, $33, $34
+        $31, $32, $33, $34, $35
       ) RETURNING client_id
     `;
 
@@ -50,7 +60,7 @@ router.post('/clients', auth, staffOnly, async (req, res) => {
       data.inn, 
       data.status || 'Активен', 
       data.registration_date || new Date(), 
-      data.client_type || 'Физ. лицо',
+      clientType,
       data.gender, 
       data.date_of_birth, 
       data.passport_series, 
@@ -79,7 +89,8 @@ router.post('/clients', auth, staffOnly, async (req, res) => {
       fioEnc, 
       innEnc, 
       fioBindex, 
-      innBindex
+      innBindex,
+      data.photo_base64 || null
     ];
 
     const { rows } = await pool.query(query, values);
@@ -87,6 +98,84 @@ router.post('/clients', auth, staffOnly, async (req, res) => {
   } catch (err) {
     console.error('[POST /api/staff/clients]', err);
     res.status(500).json({ error: 'Ошибка создания клиента: ' + err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/staff/clients/:clientId — частичное обновление данных (паспорт + фото)
+// ─────────────────────────────────────────────────────────────────────────────
+router.put('/clients/:clientId', auth, staffOnly, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const data = req.body;
+    const pool = getPool(req);
+
+    // Получаем список колонок, существующих в таблице clients этой БД тенанта
+    // (разные тенанты могут иметь разные наборы колонок — photo_base64 добавлена
+    //  позже и может отсутствовать в старых базах-копиях)
+    const { rows: columns } = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'clients' AND table_schema = 'public'
+    `);
+    const existingColumns = new Set(columns.map(c => c.column_name));
+
+    // Подготовка зашифрованных данных и индексов для ФИО и ИНН
+    const fioEnc = data.full_name ? encryptData(data.full_name) : null;
+    const innEnc = data.inn ? encryptData(data.inn) : null;
+    const fioBindex = data.full_name ? getBlindIndex(data.full_name) : null;
+    const innBindex = data.inn ? getBlindIndex(data.inn) : null;
+
+    const fields = [];
+    const values = [];
+    let idx = 1;
+
+    // Обрезаем строки до лимита колонки чтобы избежать ошибки 22001
+    // (данные из чипа паспорта могут быть длиннее ограничений VARCHAR)
+    const str = (val, maxLen) => {
+      if (val == null) return val;
+      const s = String(val);
+      return s.length > maxLen ? s.slice(0, maxLen) : s;
+    };
+
+    const addField = (col, val) => {
+      if (val !== undefined && val !== null && existingColumns.has(col)) {
+        fields.push(`"${col}" = $${idx++}`);
+        values.push(val);
+      }
+    };
+
+    addField('full_name',            str(data.full_name, 255));
+    addField('inn',                  str(data.inn, 20));
+    addField('passport_series',      str(data.passport_series, 10));
+    addField('passport_number',      str(data.passport_number, 20));
+    addField('passport_issued_by',   str(data.passport_issued_by, 255));
+    addField('passport_issued_date', data.passport_issued_date);
+    addField('passport_expiry_date', data.passport_expiry_date);
+    addField('gender',               str(data.gender, 20));
+    addField('date_of_birth',        data.date_of_birth);
+    addField('photo_base64',         data.photo_base64);  // TEXT — без лимита
+
+    if (fioEnc)    addField('fio_encrypted', fioEnc);     // TEXT — без лимита
+    if (innEnc)    addField('inn_encrypted', innEnc);     // TEXT — без лимита
+    if (fioBindex) addField('fio_bindex',    str(fioBindex, 64));
+    if (innBindex) addField('inn_bindex',    str(innBindex, 64));
+
+    if (fields.length === 0) return res.status(400).json({ error: 'Нет данных для обновления' });
+
+    values.push(clientId);
+    const query = `UPDATE clients SET ${fields.join(', ')}, updated_at = NOW()
+                   WHERE client_id = $${idx}
+                     AND (is_deleted = FALSE OR is_deleted IS NULL)
+                   RETURNING client_id`;
+    
+    const { rows } = await pool.query(query, values);
+    if (rows.length === 0) return res.status(404).json({ error: 'Клиент не найден' });
+
+    res.json({ success: true, clientId: rows[0].client_id });
+  } catch (err) {
+    console.error('[PUT /api/staff/clients/:clientId]', err);
+    res.status(500).json({ error: 'Ошибка обновления клиента: ' + err.message });
   }
 });
 
@@ -619,6 +708,140 @@ router.get('/visits', auth, staffOnly, async (req, res) => {
   } catch (err) {
     console.error('[GET /api/staff/visits]', err);
     res.status(500).json({ error: 'Ошибка получения визитов' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Внутренний корпоративный чат (Сотрудник <-> Офис/Другие)
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/chat/contacts', auth, staffOnly, async (req, res) => {
+  try {
+    const pool = getPool(req);
+    const staffId = req.client.userId;
+
+    const sql = `
+      WITH contacts AS (
+        SELECT 
+          user_id::text as contact_id,
+          full_name as contact_name,
+          NULL as contact_phone,
+          role as contact_type,
+          'STAFF' as entity_type
+        FROM users
+        WHERE is_active = true AND user_id::text != $1
+        
+        UNION ALL
+        
+        SELECT 
+          client_id::text as contact_id,
+          full_name as contact_name,
+          phone_main as contact_phone,
+          'CLIENT' as contact_type,
+          'CLIENT' as entity_type
+        FROM clients
+        WHERE (is_deleted = FALSE OR is_deleted IS NULL)
+      ),
+      chat_summary AS (
+        SELECT 
+          c.contact_id,
+          c.contact_name,
+          c.contact_phone,
+          c.contact_type,
+          c.entity_type,
+          (
+            SELECT message_text 
+            FROM internal_chat_messages 
+            WHERE 
+               (sender_id = c.contact_id AND receiver_id = $1)
+               OR (sender_id = $1 AND receiver_id = c.contact_id)
+            ORDER BY created_at DESC 
+            LIMIT 1
+          ) as last_message,
+          (
+            SELECT created_at 
+            FROM internal_chat_messages 
+            WHERE 
+               (sender_id = c.contact_id AND receiver_id = $1)
+               OR (sender_id = $1 AND receiver_id = c.contact_id)
+            ORDER BY created_at DESC 
+            LIMIT 1
+          ) as last_message_date,
+          (
+            SELECT COUNT(*) 
+            FROM internal_chat_messages 
+            WHERE sender_id = c.contact_id AND receiver_id = $1 AND is_read = false
+          ) as unread_count
+        FROM contacts c
+      )
+      SELECT * FROM chat_summary
+      ORDER BY 
+        CASE WHEN entity_type = 'STAFF' THEN 0 ELSE 1 END ASC,
+        last_message_date DESC NULLS LAST, 
+        contact_name ASC
+    `;
+    
+    const { rows } = await pool.query(sql, [String(staffId)]);
+    res.json(rows);
+  } catch (err) {
+    console.error('GET /api/staff/chat/contacts', err);
+    res.status(500).json({ error: 'Ошибка получения контактов' });
+  }
+});
+
+router.get('/chat/history', auth, staffOnly, async (req, res) => {
+  try {
+    const pool = getPool(req);
+    const staffId = req.client.userId;
+    const { receiverId, receiverType } = req.query;
+    
+    if (!receiverId || !receiverType) {
+        return res.status(400).json({ error: 'receiverId and receiverType required' });
+    }
+
+    // Mark messages from this recipient as read
+    await pool.query(`
+      UPDATE internal_chat_messages 
+      SET is_read = true 
+      WHERE sender_type = $1 AND sender_id = $2 AND receiver_type = 'STAFF' AND receiver_id = $3
+    `, [receiverType, receiverId, String(staffId)]);
+
+    const query = `
+      SELECT * FROM internal_chat_messages
+      WHERE (sender_type = 'STAFF' AND sender_id = $1 AND receiver_type = $2 AND receiver_id = $3)
+         OR (sender_type = $2 AND sender_id = $3 AND receiver_type = 'STAFF' AND receiver_id = $1)
+      ORDER BY created_at ASC
+      LIMIT 200
+    `;
+    const { rows } = await pool.query(query, [String(staffId), receiverType, receiverId]);
+    res.json(rows);
+  } catch (err) {
+    console.error('GET /api/staff/chat/history', err);
+    res.status(500).json({ error: 'Ошибка получения истории чата' });
+  }
+});
+
+router.post('/chat/send', auth, staffOnly, async (req, res) => {
+  try {
+    const pool = getPool(req);
+    const staffId = req.client.userId;
+    const { messageText, receiverId, receiverType } = req.body;
+    
+    if (!messageText || !receiverId || !receiverType) {
+      return res.status(400).json({ error: 'messageText, receiverId, receiverType обязательны' });
+    }
+
+    const query = `
+      INSERT INTO internal_chat_messages (sender_type, sender_id, receiver_type, receiver_id, message_text)
+      VALUES ('STAFF', $1, $2, $3, $4)
+      RETURNING *
+    `;
+    const { rows } = await pool.query(query, [String(staffId), receiverType, receiverId, messageText]);
+    
+    res.json({ success: true, message: rows[0] });
+  } catch (err) {
+    console.error('POST /api/staff/chat/send', err);
+    res.status(500).json({ error: 'Ошибка отправки сообщения' });
   }
 });
 

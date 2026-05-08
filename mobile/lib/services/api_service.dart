@@ -28,8 +28,9 @@ class ApiService {
 
   late final Dio _dio = Dio(BaseOptions(
     baseUrl: isProduction ? prodUrl : devUrl,
-    connectTimeout: const Duration(seconds: 8),
-    receiveTimeout: const Duration(seconds: 8),
+    connectTimeout: const Duration(seconds: 30),
+    receiveTimeout: const Duration(seconds: 30),
+    sendTimeout: const Duration(seconds: 30),
     headers: {'Content-Type': 'application/json'},
   ))
     ..interceptors.add(InterceptorsWrapper(
@@ -159,8 +160,8 @@ class ApiService {
   }
 
   Future<List<dynamic>> searchClients(String query) async {
-    final data = await _requestWithCache('/api/staff/clients', queryParameters: {'search': query});
-    return data as List<dynamic>;
+    final response = await _dio.get('/api/staff/clients', queryParameters: {'search': query});
+    return response.data as List<dynamic>;
   }
 
   Future<Map<String, dynamic>> getClientDetails(String clientId) async {
@@ -227,6 +228,11 @@ class ApiService {
     return response.data as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> updateClient(String clientId, Map<String, dynamic> data) async {
+    final response = await _dio.put('/api/staff/clients/$clientId', data: data);
+    return response.data as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> createLoan(Map<String, dynamic> data) async {
     final response = await _dio.post('/api/staff/loans', data: data);
     return response.data as Map<String, dynamic>;
@@ -265,6 +271,70 @@ class ApiService {
   }
 
   // ─── PUSH NOTIFICATIONS ───────────────────────────────────────────────────
+
+  // Отправить Push-уведомление клиенту
+  Future<Map<String, dynamic>> sendPush(String clientId, String title, String body) async {
+    final response = await _dio.post(
+      '/api/notifications/send-push',
+      data: {
+        'clientId': clientId,
+        'title': title,
+        'body': body,
+      },
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  // ─── ВНУТРЕННИЙ ЧАТ ─────────────────────────────────────────────────────────
+
+  Future<List<dynamic>> getChatContacts({required bool isStaff}) async {
+    final endpoint = isStaff ? '/api/staff/chat/contacts' : '/api/chat/contacts';
+    try {
+      final response = await _dio.get(endpoint);
+      return response.data;
+    } catch (e) {
+      print('getChatContacts error: $e');
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> getChatHistory({
+    required bool isStaff,
+    required String receiverId,
+    required String receiverType,
+  }) async {
+    final endpoint = isStaff ? '/api/staff/chat/history' : '/api/chat/history';
+    try {
+      final response = await _dio.get(
+        endpoint,
+        queryParameters: {'receiverId': receiverId, 'receiverType': receiverType},
+      );
+      return response.data;
+    } catch (e) {
+      print('getChatHistory error: $e');
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>> sendChatMessage(
+    String messageText, {
+    required bool isStaff,
+    required String receiverId,
+    required String receiverType,
+  }) async {
+    final endpoint = isStaff ? '/api/staff/chat/send' : '/api/chat/send';
+    try {
+      final response = await _dio.post(endpoint, data: {
+        'messageText': messageText,
+        'receiverId': receiverId,
+        'receiverType': receiverType,
+      });
+      return response.data;
+    } catch (e) {
+      print('sendChatMessage error: $e');
+      throw e;
+    }
+  }
 
   // Сохранить FCM токен на сервере
   Future<void> saveFcmToken(String token) async {

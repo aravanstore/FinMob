@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
 import '../models/loan.dart';
 import '../services/theme_controller.dart';
 import '../theme/app_theme.dart';
 import '../widgets/loan_calculator.dart';
+import 'shared/chat_list_screen.dart';
+import '../services/push_notification_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -19,6 +23,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _api = ApiService();
   late Future<List<Loan>> _loansFuture;
   late Future<Map<String, dynamic>> _sharesFuture;
+  int _currentIndex = 0;
 
   @override
   void initState() {
@@ -35,8 +40,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _checkAnnouncements() async {
     try {
       final announcement = await _api.getActiveAnnouncement();
-      if (announcement != null && mounted) {
-        _showAnnouncementDialog(announcement);
+      if (announcement != null && announcement['id'] != null && mounted) {
+        final prefs = await SharedPreferences.getInstance();
+        final lastId = prefs.getInt('last_announcement_id');
+        
+        if (lastId != announcement['id']) {
+          _showAnnouncementDialog(announcement);
+        }
       }
     } catch (e) {
       debugPrint('Check announcements error: $e');
@@ -76,7 +86,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setInt('last_announcement_id', data['id']);
+              if (mounted) Navigator.pop(context);
+            },
             child: const Text(
               'Понятно',
               style: TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold),
@@ -102,141 +116,308 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthService>();
-    final fmt = NumberFormat('#,##0.00', 'ru_RU');
+    final fmt = NumberFormat('#,##0', 'ru_RU');
     final pal = AppPalette.of(context);
 
     return Scaffold(
       backgroundColor: pal.bg,
-      appBar: AppBar(
-        backgroundColor: pal.bg,
-        elevation: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('client.my_loans'.tr(),
-                style: TextStyle(
-                    color: pal.textPri,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20)),
-            Text(auth.phone,
-                style: TextStyle(color: pal.textSec.withValues(alpha: 0.75), fontSize: 12)),
-          ],
-        ),
-        actions: [
-          PopupMenuButton<Locale>(
-            icon: Icon(Icons.language, color: pal.textSec),
-            onSelected: (locale) {
-              EasyLocalization.of(context)!.setLocale(locale);
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: Locale('ru'), child: Text('Русский')),
-              const PopupMenuItem(value: Locale('ky'), child: Text('Кыргызча')),
-              const PopupMenuItem(value: Locale('en'), child: Text('English')),
-            ],
-          ),
-          IconButton(
-            tooltip: 'Тема',
-            icon: Icon(
-              context.watch<ThemeController>().isLight
-                  ? Icons.dark_mode_rounded
-                  : Icons.light_mode_rounded,
-              color: pal.textSec,
-            ),
-            onPressed: () => context.read<ThemeController>().toggle(),
-          ),
-          IconButton(
-            icon: Icon(Icons.logout, color: pal.textSec),
-            onPressed: () async {
-              await auth.logout();
-              if (context.mounted) context.go('/login');
-            },
-          ),
-        ],
-      ),
+      appBar: _currentIndex == 0 ? _buildHomeAppBar(auth, pal) : null,
       body: FutureBuilder<List<Loan>>(
         future: _loansFuture,
         builder: (ctx, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(
-                child: CircularProgressIndicator(color: Color(0xFF1A56DB)));
+            return const Center(child: CircularProgressIndicator(color: Color(0xFF1A56DB)));
           }
-          if (snap.hasError) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.wifi_off_rounded,
-                      color: Colors.white30, size: 64),
-                  const SizedBox(height: 16),
-                  Text('client.no_connection'.tr(),
-                      style: TextStyle(color: pal.textSec)),
-                  const SizedBox(height: 12),
-                  TextButton(
-                      onPressed: () => setState(() {
-                            _loansFuture = _loadLoans();
-                            _sharesFuture = _api.getSharesSummary();
-                          }),
-                      child: Text('client.retry'.tr())),
-                ],
-              ),
-            );
-          }
+          if (snap.hasError) return _buildErrorView(pal);
 
           final loans = snap.data!;
-
-          return RefreshIndicator(
-            onRefresh: () async => setState(() {
-              _loansFuture = _loadLoans();
-              _sharesFuture = _api.getSharesSummary();
-            }),
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                FutureBuilder<Map<String, dynamic>>(
-                  future: _sharesFuture,
-                  builder: (context, shareSnap) {
-                    if (shareSnap.hasData) {
-                      final s = shareSnap.data!;
-                      return Column(
-                        children: [
-                          _SharesCard(
-                            shares:    _d(s['share_balance']),
-                            dividends: _d(s['accrued_dividends']),
-                            fmt: fmt,
-                          ),
-                          const SizedBox(height: 16),
-                          _ContactSection(),
-                        ],
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                ),
-                const SizedBox(height: 16),
-                _CalculatorSection(),
-                const SizedBox(height: 20),
-                Text('client.active_loans'.tr(),
-                    style: TextStyle(
-                        color: pal.textPri,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold)),
-                const SizedBox(height: 12),
-                if (loans.isEmpty)
-                  Center(
-                      child: Text('client.no_loans'.tr(),
-                          style: TextStyle(color: pal.textSec.withValues(alpha: 0.75))))
-                else
-                  ...loans.map((l) => _LoanCard(loan: l, fmt: fmt)),
-              ],
-            ),
+          return FutureBuilder<Map<String, dynamic>>(
+            future: _sharesFuture,
+            builder: (ctx, shareSnap) {
+              final shares = shareSnap.data ?? {};
+              return IndexedStack(
+                index: _currentIndex,
+                children: [
+                  _HomeTab(loans: loans, shares: shares, fmt: fmt, onTabChange: (i) => setState(() => _currentIndex = i)),
+                  _LoansTab(loans: loans, fmt: fmt),
+                  _SharesTab(shares: shares, fmt: fmt),
+                  const ChatListScreen(isStaff: false),
+                ],
+              );
+            },
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.go('/payments'),
-        backgroundColor: const Color(0xFF1A56DB),
-        icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
-        label: const Text('Оплатить', style: TextStyle(color: Colors.white)),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, -2))],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: (i) => setState(() => _currentIndex = i),
+          backgroundColor: pal.card,
+          selectedItemColor: const Color(0xFF1A56DB),
+          unselectedItemColor: pal.textSec.withValues(alpha: 0.5),
+          showUnselectedLabels: true,
+          type: BottomNavigationBarType.fixed,
+          items: [
+            const BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Главная'),
+            const BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_rounded), label: 'Кредиты'),
+            const BottomNavigationBarItem(icon: Icon(Icons.pie_chart_rounded), label: 'Паи'),
+            const BottomNavigationBarItem(icon: Icon(Icons.chat_rounded), label: 'Чат'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  PreferredSizeWidget _buildHomeAppBar(AuthService auth, AppPalette pal) {
+    return AppBar(
+      backgroundColor: pal.bg,
+      elevation: 0,
+      centerTitle: false,
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Здравствуйте,', style: TextStyle(color: pal.textSec, fontSize: 14)),
+          Text(auth.fullName.split(' ')[0], style: TextStyle(color: pal.textPri, fontWeight: FontWeight.bold, fontSize: 22)),
+        ],
+      ),
+      actions: [
+        ValueListenableBuilder<int>(
+          valueListenable: PushNotificationService.unreadCount,
+          builder: (context, count, _) {
+            return Stack(
+              children: [
+                IconButton(
+                  icon: Icon(Icons.notifications_none_rounded, color: pal.textSec),
+                  onPressed: () => context.push('/notifications'),
+                ),
+                if (count > 0)
+                  Positioned(
+                    right: 12,
+                    top: 12,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 8,
+                        minHeight: 8,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          }
+        ),
+        IconButton(
+          icon: Icon(Icons.logout_rounded, color: pal.textSec),
+          onPressed: () async {
+            await context.read<AuthService>().logout();
+            if (mounted) context.go('/login');
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildErrorView(AppPalette pal) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.wifi_off_rounded, color: Colors.white30, size: 64),
+          const SizedBox(height: 16),
+          Text('client.no_connection'.tr(), style: TextStyle(color: pal.textSec)),
+          TextButton(onPressed: () => setState(() { _loansFuture = _loadLoans(); _sharesFuture = _api.getSharesSummary(); }), child: Text('client.retry'.tr())),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeTab extends StatelessWidget {
+  final List<Loan> loans;
+  final Map<String, dynamic> shares;
+  final NumberFormat fmt;
+  final Function(int) onTabChange;
+
+  const _HomeTab({required this.loans, required this.shares, required this.fmt, required this.onTabChange});
+
+  @override
+  Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
+    final activeLoans = loans.where((l) => l.isActive).toList();
+    final totalDebt = activeLoans.fold(0.0, (sum, l) => sum + l.totalDebt);
+
+    return RefreshIndicator(
+      onRefresh: () async { /* Parent handles it */ },
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          // Total Debt Card
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1E3A8A), Color(0xFF1D4ED8), Color(0xFF3B82F6)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [BoxShadow(color: const Color(0xFF1A56DB).withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 10))],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Общая задолженность', style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
+                    const Icon(Icons.shield_rounded, color: Colors.white54, size: 20),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text('${fmt.format(totalDebt)} сом', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    _quickAction(context, Icons.qr_code_scanner, 'Оплатить', () => context.go('/payments')),
+                    const SizedBox(width: 12),
+                    _quickAction(context, Icons.calculate_outlined, 'Расчёт', () => LoanCalculator.show(context)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+          
+          // Services Section
+          _sectionTitle(pal, 'Сервисы'),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _serviceItem(context, Icons.chat_rounded, 'Поддержка', () => onTabChange(3)),
+              _serviceItem(context, Icons.history_rounded, 'История', () => onTabChange(2)),
+              _serviceItem(context, Icons.description_outlined, 'Справки', () {}),
+              _serviceItem(context, Icons.settings_outlined, 'Настройки', () {}),
+            ],
+          ),
+          
+          const SizedBox(height: 32),
+          
+          // Active Loan Preview
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _sectionTitle(pal, 'Активные кредиты'),
+              TextButton(onPressed: () => onTabChange(1), child: const Text('Все')),
+            ],
+          ),
+          if (activeLoans.isEmpty)
+             Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('Нет активных кредитов', style: TextStyle(color: pal.textSec))))
+          else
+            _LoanCard(loan: activeLoans[0], fmt: fmt),
+        ],
+      ),
+    );
+  }
+
+  Widget _quickAction(BuildContext context, IconData icon, String label, VoidCallback onTap) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _serviceItem(BuildContext context, IconData icon, String label, VoidCallback onTap) {
+    final pal = AppPalette.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: pal.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: pal.border),
+            ),
+            child: Icon(icon, color: const Color(0xFF1A56DB), size: 26),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: TextStyle(color: pal.textSec, fontSize: 11, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionTitle(AppPalette pal, String title) {
+    return Text(title, style: TextStyle(color: pal.textPri, fontSize: 18, fontWeight: FontWeight.bold));
+  }
+}
+
+class _LoansTab extends StatelessWidget {
+  final List<Loan> loans;
+  final NumberFormat fmt;
+  const _LoansTab({required this.loans, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
+    return Scaffold(
+      backgroundColor: pal.bg,
+      appBar: AppBar(backgroundColor: pal.bg, elevation: 0, title: const Text('Мои кредиты', style: TextStyle(fontWeight: FontWeight.bold))),
+      body: ListView.builder(
+        padding: const EdgeInsets.all(20),
+        itemCount: loans.length,
+        itemBuilder: (context, i) => _LoanCard(loan: loans[i], fmt: fmt),
+      ),
+    );
+  }
+}
+
+class _SharesTab extends StatelessWidget {
+  final Map<String, dynamic> shares;
+  final NumberFormat fmt;
+  const _SharesTab({required this.shares, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    final pal = AppPalette.of(context);
+    double _d(dynamic v) => (v is num) ? v.toDouble() : double.tryParse(v?.toString() ?? '0') ?? 0.0;
+
+    return Scaffold(
+      backgroundColor: pal.bg,
+      appBar: AppBar(backgroundColor: pal.bg, elevation: 0, title: const Text('Паевые взносы', style: TextStyle(fontWeight: FontWeight.bold))),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          _SharesCard(shares: _d(shares['share_balance']), dividends: _d(shares['accrued_dividends']), fmt: fmt),
+          const SizedBox(height: 24),
+          _ContactSection(),
+        ],
       ),
     );
   }

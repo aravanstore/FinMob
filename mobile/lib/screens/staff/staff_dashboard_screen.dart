@@ -8,6 +8,44 @@ import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import '../../services/theme_controller.dart';
 import '../../theme/app_theme.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../shared/chat_list_screen.dart';
+
+// ─── HELPER FUNCTIONS ────────────────────────────────────────────────────────
+void _handleWhatsApp(BuildContext context, String? phone, String text) async {
+  if (phone == null || phone.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Номер телефона не указан')));
+    return;
+  }
+  final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+  String targetPhone = cleanPhone;
+  if (targetPhone.startsWith('0') && targetPhone.length >= 9) {
+    targetPhone = '996${targetPhone.substring(1)}';
+  } else if (!targetPhone.startsWith('996') && targetPhone.length >= 9) {
+    targetPhone = '996$targetPhone';
+  }
+  final url = Uri.parse('https://wa.me/$targetPhone?text=${Uri.encodeComponent(text)}');
+  if (await canLaunchUrl(url)) {
+    await launchUrl(url, mode: LaunchMode.externalApplication);
+  } else {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Не удалось открыть WhatsApp')));
+    }
+  }
+}
+
+void _handleSendPush(BuildContext context, String clientId, String text) async {
+  try {
+    await ApiService().sendPush(clientId, 'Уведомление', text);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Push-уведомление отправлено'), backgroundColor: Colors.green));
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка отправки: $e'), backgroundColor: Colors.red));
+    }
+  }
+}
 
 // ─── Цветовая палитра ────────────────────────────────────────────────────────
 class _C {
@@ -53,7 +91,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
     _statsFuture = _api.getDashboardStats();
     _overdueFuture = _api.getOverdueLoans();
     _approvalsFuture = _api.getApprovals();
-    // _doSearch() убран из initState — не нужно грузить клиентов при старте
+    _doSearch(); // Загружаем последних клиентов при старте
   }
 
   @override
@@ -112,6 +150,7 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
               _buildSearchTab(fmt),
               _buildApprovalsTab(fmt),
               _buildOverdueTab(fmt),
+              const ChatListScreen(isStaff: true),
             ],
           ),
         ),
@@ -241,6 +280,12 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                   icon: Icons.warning_amber_rounded,
                   label: 'staff.overdue'.tr(),
                   index: 3,
+                  current: _tabIndex,
+                  onTap: _setTab),
+              _NavItem(
+                  icon: Icons.chat_rounded,
+                  label: 'Чат',
+                  index: 4,
                   current: _tabIndex,
                   onTap: _setTab),
             ],
@@ -910,7 +955,26 @@ class _ClientCard extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: pal.textHint, size: 20),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications_active_rounded, color: _C.accentLt, size: 22),
+                  onPressed: () => _handleSendPush(context, client['client_id']?.toString() ?? '', 'Уважаемый клиент ${client['full_name']}, просим вас связаться с нами.'),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 12),
+                IconButton(
+                  icon: const Icon(Icons.chat_rounded, color: Color(0xFF25D366), size: 22),
+                  onPressed: () => _handleWhatsApp(context, phone, 'Здравствуйте, ${client['full_name']}.'),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 8),
+                Icon(Icons.chevron_right_rounded, color: pal.textHint, size: 20),
+              ],
+            ),
           ],
         ),
       ),
@@ -1028,7 +1092,26 @@ class _OverdueCard extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: pal.textHint, size: 20),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications_active_rounded, color: _C.red, size: 22),
+                  onPressed: () => _handleSendPush(context, item['client_id']?.toString() ?? '', 'Напоминаем о просрочке по договору. Сумма к погашению: ${fmt.format(debt)} сом. Просим погасить задолженность.'),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 12),
+                IconButton(
+                  icon: const Icon(Icons.chat_rounded, color: Color(0xFF25D366), size: 22),
+                  onPressed: () => _handleWhatsApp(context, item['phone_main']?.toString(), 'Здравствуйте, ${item['full_name']}. Напоминаем о просрочке по договору. Сумма к погашению: ${fmt.format(debt)} сом. Просим срочно произвести оплату.'),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 8),
+                Icon(Icons.chevron_right_rounded, color: pal.textHint, size: 20),
+              ],
+            ),
           ],
         ),
       ),
