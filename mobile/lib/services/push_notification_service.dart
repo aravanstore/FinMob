@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
@@ -29,6 +30,7 @@ class PushNotificationService {
   static Function(RemoteMessage)? onNotificationClick;
   static final unreadCount = ValueNotifier<int>(0);
   static final chatUnreadCount = ValueNotifier<int>(0);
+  static final StreamController<Map<String, dynamic>> chatMessageStream = StreamController.broadcast();
 
   // ─── Канал уведомлений Android ─────────────────────────────────────────────
   static const _paymentChannel = AndroidNotificationChannel(
@@ -79,7 +81,7 @@ class PushNotificationService {
 
       // Если это сообщение чата — обновляем счетчик
       if (message.data['type'] == 'chat' || message.data['sender_type'] != null) {
-        _refreshChatCount(apiService);
+        refreshChatCount(apiService);
       }
 
       _localNotifications.show(
@@ -228,7 +230,7 @@ class PushNotificationService {
     await prefs.remove('notifications_history');
   }
 
-  static Future<void> _refreshChatCount(ApiService api) async {
+  static Future<void> refreshChatCount(ApiService api) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final role = prefs.getString('user_role');

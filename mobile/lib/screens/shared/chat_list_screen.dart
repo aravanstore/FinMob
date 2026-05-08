@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../../services/push_notification_service.dart';
+import '../../services/theme_controller.dart';
 import '../../theme/app_theme.dart';
 import 'internal_chat_screen.dart';
 
@@ -23,10 +26,18 @@ class _ChatListScreenState extends State<ChatListScreen> {
   void initState() {
     super.initState();
     _fetchContacts();
+    
+    // Подписка на уведомления о новых сообщениях для мгновенного обновления списка
+    _chatSubscription = PushNotificationService.chatMessageStream.stream.listen((_) {
+      _fetchContacts();
+    });
   }
+
+  StreamSubscription? _chatSubscription;
 
   @override
   void dispose() {
+    _chatSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
   }

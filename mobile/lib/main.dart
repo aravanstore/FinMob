@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'firebase_options.dart';
 import 'services/push_notification_service.dart';
@@ -84,6 +85,7 @@ class _FinCoreAppState extends State<FinCoreApp> {
   void initState() {
     super.initState();
     final auth = context.read<AuthService>();
+    final apiService = context.read<ApiService>();
 
     _router = GoRouter(
       refreshListenable: auth,
@@ -182,13 +184,21 @@ class _FinCoreAppState extends State<FinCoreApp> {
       },
     );
 
-    // Переход в историю уведомлений при клике на Push
+    // Обработка уведомлений в активном приложении (Foreground)
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (message.data['type'] == 'chat') {
+        PushNotificationService.refreshChatCount(apiService);
+        PushNotificationService.chatMessageStream.add(message.data);
+      }
+    });
+
     PushNotificationService.onNotificationClick = (message) {
       if (auth.isLoggedIn) {
         _router.push('/notifications');
       }
     };
   }
+
 
   @override
   Widget build(BuildContext context) {

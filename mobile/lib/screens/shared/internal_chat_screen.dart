@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../../services/push_notification_service.dart';
 import '../../services/theme_controller.dart';
 import '../../theme/app_theme.dart';
 
@@ -36,11 +37,20 @@ class _InternalChatScreenState extends State<InternalChatScreen> {
   void initState() {
     super.initState();
     _fetchMessages();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchMessages(silent: true));
+    
+    // Мгновенное обновление сообщений при получении Пуша от этого контакта
+    _chatSubscription = PushNotificationService.chatMessageStream.stream.listen((data) {
+      if (data['sender_id'] == widget.contactId) {
+        _fetchMessages(silent: true);
+      }
+    });
   }
+
+  StreamSubscription? _chatSubscription;
 
   @override
   void dispose() {
+    _chatSubscription?.cancel();
     _pollingTimer?.cancel();
     _textController.dispose();
     _scrollController.dispose();

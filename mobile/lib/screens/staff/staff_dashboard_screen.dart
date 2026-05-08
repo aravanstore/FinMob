@@ -96,10 +96,12 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
     _approvalsFuture = _api.getApprovals();
     _doSearch(); // Загружаем последних клиентов при старте
     _pollChatUnread();
+    _chatPollingTimer = Timer.periodic(const Duration(seconds: 60), (_) => _pollChatUnread());
   }
 
   @override
   void dispose() {
+    _chatPollingTimer?.cancel();
     _fadeCtrl.dispose();
     _searchCtrl.dispose();
     _searchFocus.dispose();
