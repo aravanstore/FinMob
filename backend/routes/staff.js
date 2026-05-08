@@ -13,7 +13,8 @@ function staffOnly(req, res, next) {
   next();
 }
 
-const getPool = (req) => getTenantPool(req.client.dbName);
+const { getPool, getTenantPool } = require('../db/pool');
+const { sendPush } = require('../push_scheduler');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/staff/clients — создание нового клиента сотрудником
@@ -838,6 +839,26 @@ router.post('/chat/send', auth, staffOnly, async (req, res) => {
     `;
     const { rows } = await pool.query(query, [String(staffId), receiverType, receiverId, messageText]);
     
+    // Отправка PUSH-уведомления
+    try {
+        const { rows: tokens } = await pool.query(
+            'SELECT fcm_token FROM fcm_tokens WHERE client_id = $1',
+            [String(receiverId)]
+        );
+        if (tokens.length > 0) {
+            const senderName = req.client.fullName || 'Сотрудник';
+            for (const t of tokens) {
+                await sendPush(t.fcm_token, senderName, messageText, {
+                    type: 'chat',
+                    sender_id: String(staffId),
+                    sender_name: senderName
+                });
+            }
+        }
+    } catch (pushErr) {
+        console.error('[PUSH Error] Staff Chat:', pushErr.message);
+    }
+
     res.json({ success: true, message: rows[0] });
   } catch (err) {
     console.error('POST /api/staff/chat/send', err);

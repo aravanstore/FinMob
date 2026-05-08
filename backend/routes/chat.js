@@ -2,6 +2,8 @@ const router = require('express').Router();
 const auth = require('../middleware/auth');
 const { getTenantPool } = require('../db/pool');
 
+const { sendPush } = require('../push_scheduler');
+
 const getPool = (req) => getTenantPool(req.client.dbName);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,6 +123,26 @@ router.post('/send', auth, async (req, res) => {
     `;
     const { rows } = await pool.query(query, [String(clientId), receiverType, receiverId, messageText]);
     
+    // Отправка PUSH-уведомления сотруднику
+    try {
+        const { rows: tokens } = await pool.query(
+            'SELECT fcm_token FROM fcm_tokens WHERE client_id = $1',
+            [String(receiverId)]
+        );
+        if (tokens.length > 0) {
+            const senderName = req.client.fullName || 'Клиент';
+            for (const t of tokens) {
+                await sendPush(t.fcm_token, senderName, messageText, {
+                    type: 'chat',
+                    sender_id: String(clientId),
+                    sender_name: senderName
+                });
+            }
+        }
+    } catch (pushErr) {
+        console.error('[PUSH Error] Chat:', pushErr.message);
+    }
+
     res.json({ success: true, message: rows[0] });
   } catch (err) {
     console.error('POST /api/chat/send', err);

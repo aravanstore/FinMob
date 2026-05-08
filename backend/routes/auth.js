@@ -123,6 +123,7 @@ router.post('/staff-login', async (req, res) => {
       {
         role:        'staff',
         userId:      user.user_id,
+        clientId:    user.user_id, // Для системы уведомлений
         username:    user.username,
         fullName:    user.full_name,
         staffRole:   user.role,       // Admin / Operator / Manager / Chairman
