@@ -28,6 +28,7 @@ class PushNotificationService {
   static String? _currentToken;
   static Function(RemoteMessage)? onNotificationClick;
   static final unreadCount = ValueNotifier<int>(0);
+  static final chatUnreadCount = ValueNotifier<int>(0);
 
   // ─── Канал уведомлений Android ─────────────────────────────────────────────
   static const _paymentChannel = AndroidNotificationChannel(

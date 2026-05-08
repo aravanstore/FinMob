@@ -10,6 +10,7 @@ import '../../services/theme_controller.dart';
 import '../../theme/app_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../shared/chat_list_screen.dart';
+import '../../services/push_notification_service.dart';
 
 // ─── HELPER FUNCTIONS ────────────────────────────────────────────────────────
 void _handleWhatsApp(BuildContext context, String? phone, String text) async {
@@ -77,6 +78,8 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
   late Future<List<dynamic>> _overdueFuture;
   late Future<List<dynamic>> _approvalsFuture;
 
+  Timer? _chatPollingTimer;
+
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
 
@@ -92,14 +95,31 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
     _overdueFuture = _api.getOverdueLoans();
     _approvalsFuture = _api.getApprovals();
     _doSearch(); // Загружаем последних клиентов при старте
+    
+    _pollChatUnread();
+    _chatPollingTimer = Timer.periodic(const Duration(seconds: 15), (_) => _pollChatUnread());
   }
 
   @override
   void dispose() {
+    _chatPollingTimer?.cancel();
     _fadeCtrl.dispose();
     _searchCtrl.dispose();
     _searchFocus.dispose();
     super.dispose();
+  }
+
+  Future<void> _pollChatUnread() async {
+    try {
+      final contacts = await _api.getChatContacts(isStaff: true);
+      int total = 0;
+      for (var c in contacts) {
+        total += int.tryParse(c['unread_count']?.toString() ?? '0') ?? 0;
+      }
+      PushNotificationService.chatUnreadCount.value = total;
+    } catch (e) {
+      debugPrint('Poll chat unread error: $e');
+    }
   }
 
   Timer? _searchDebounce;
@@ -282,12 +302,19 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
                   index: 3,
                   current: _tabIndex,
                   onTap: _setTab),
-              _NavItem(
-                  icon: Icons.chat_rounded,
-                  label: 'Чат',
-                  index: 4,
-                  current: _tabIndex,
-                  onTap: _setTab),
+              ValueListenableBuilder<int>(
+                valueListenable: PushNotificationService.chatUnreadCount,
+                builder: (context, count, _) {
+                  return _NavItem(
+                    icon: Icons.chat_rounded,
+                    label: 'Чат',
+                    index: 4,
+                    current: _tabIndex,
+                    onTap: _setTab,
+                    badgeCount: count,
+                  );
+                }
+              ),
             ],
           ),
         ),
@@ -664,6 +691,7 @@ class _NavItem extends StatelessWidget {
   final String label;
   final int index;
   final int current;
+  final int badgeCount;
   final void Function(int) onTap;
 
   const _NavItem(
@@ -671,7 +699,8 @@ class _NavItem extends StatelessWidget {
       required this.label,
       required this.index,
       required this.current,
-      required this.onTap});
+      required this.onTap,
+      this.badgeCount = 0});
 
   @override
   Widget build(BuildContext context) {
@@ -690,7 +719,36 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: active ? _C.accentLt : pal.textSec, size: 22),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon, color: active ? _C.accentLt : pal.textSec, size: 22),
+                if (badgeCount > 0)
+                  Positioned(
+                    right: -6,
+                    top: -6,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: _C.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 14,
+                        minHeight: 14,
+                      ),
+                      child: Text(
+                        badgeCount > 9 ? '9+' : '$badgeCount',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 7,
+                            fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 4),
             Text(
               label,

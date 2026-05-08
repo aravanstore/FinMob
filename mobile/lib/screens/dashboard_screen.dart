@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -25,6 +26,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late Future<Map<String, dynamic>> _sharesFuture;
   int _currentIndex = 0;
 
+  Timer? _chatPollingTimer;
+
   @override
   void initState() {
     super.initState();
@@ -34,7 +37,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Проверка объявлений только один раз при загрузке
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAnnouncements();
+      _pollChatUnread();
     });
+
+    _chatPollingTimer = Timer.periodic(const Duration(seconds: 15), (_) => _pollChatUnread());
+  }
+
+  @override
+  void dispose() {
+    _chatPollingTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _pollChatUnread() async {
+    try {
+      final auth = context.read<AuthService>();
+      final contacts = await _api.getChatContacts(isStaff: auth.role == 'staff');
+      int total = 0;
+      for (var c in contacts) {
+        total += int.tryParse(c['unread_count']?.toString() ?? '0') ?? 0;
+      }
+      PushNotificationService.chatUnreadCount.value = total;
+    } catch (e) {
+      debugPrint('Poll chat unread error: $e');
+    }
   }
 
   Future<void> _checkAnnouncements() async {
@@ -164,7 +190,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Главная'),
             const BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_rounded), label: 'Кредиты'),
             const BottomNavigationBarItem(icon: Icon(Icons.pie_chart_rounded), label: 'Паи'),
-            const BottomNavigationBarItem(icon: Icon(Icons.chat_rounded), label: 'Чат'),
+            BottomNavigationBarItem(
+              icon: ValueListenableBuilder<int>(
+                valueListenable: PushNotificationService.chatUnreadCount,
+                builder: (context, count, _) {
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      const Icon(Icons.chat_rounded),
+                      if (count > 0)
+                        Positioned(
+                          right: -6,
+                          top: -6,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            child: Text(
+                              count > 9 ? '9+' : '$count',
+                              style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+              label: 'Чат',
+            ),
           ],
         ),
       ),
