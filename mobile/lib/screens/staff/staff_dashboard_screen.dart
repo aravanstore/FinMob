@@ -95,14 +95,11 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
     _overdueFuture = _api.getOverdueLoans();
     _approvalsFuture = _api.getApprovals();
     _doSearch(); // Загружаем последних клиентов при старте
-    
     _pollChatUnread();
-    _chatPollingTimer = Timer.periodic(const Duration(seconds: 15), (_) => _pollChatUnread());
   }
 
   @override
   void dispose() {
-    _chatPollingTimer?.cancel();
     _fadeCtrl.dispose();
     _searchCtrl.dispose();
     _searchFocus.dispose();
@@ -322,7 +319,13 @@ class _StaffDashboardScreenState extends State<StaffDashboardScreen>
     );
   }
 
-  void _setTab(int i) => setState(() => _tabIndex = i);
+  void _setTab(int i) {
+    setState(() => _tabIndex = i);
+    if (i == 4) {
+      // Вкладка чата
+      PushNotificationService.chatUnreadCount.value = 0;
+    }
+  }
 
   // ─── HOME TAB ──────────────────────────────────────────────────────────────
   Widget _buildHomeTab(NumberFormat fmt) {

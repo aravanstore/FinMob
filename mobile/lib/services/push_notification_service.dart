@@ -77,6 +77,11 @@ class PushNotificationService {
       
       await saveNotificationLocally(message);
 
+      // Если это сообщение чата — обновляем счетчик
+      if (message.data['type'] == 'chat' || message.data['sender_type'] != null) {
+        _refreshChatCount(apiService);
+      }
+
       _localNotifications.show(
         notification.hashCode,
         notification.title,
@@ -221,5 +226,22 @@ class PushNotificationService {
   static Future<void> clearHistory() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('notifications_history');
+  }
+
+  static Future<void> _refreshChatCount(ApiService api) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final role = prefs.getString('user_role');
+      if (role == null) return;
+      
+      final contacts = await api.getChatContacts(isStaff: role == 'staff');
+      int total = 0;
+      for (var c in contacts) {
+        total += int.tryParse(c['unread_count']?.toString() ?? '0') ?? 0;
+      }
+      chatUnreadCount.value = total;
+    } catch (e) {
+      debugPrint('[FCM] Error refreshing chat count: $e');
+    }
   }
 }

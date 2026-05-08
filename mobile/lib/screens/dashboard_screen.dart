@@ -39,13 +39,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _checkAnnouncements();
       _pollChatUnread();
     });
-
-    _chatPollingTimer = Timer.periodic(const Duration(seconds: 15), (_) => _pollChatUnread());
   }
 
   @override
   void dispose() {
-    _chatPollingTimer?.cancel();
     super.dispose();
   }
 
@@ -180,7 +177,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
-          onTap: (i) => setState(() => _currentIndex = i),
+          onTap: (i) {
+            setState(() => _currentIndex = i);
+            if (i == 3) {
+              // Вкладка чата
+              PushNotificationService.chatUnreadCount.value = 0;
+            }
+          },
           backgroundColor: pal.card,
           selectedItemColor: const Color(0xFF1A56DB),
           unselectedItemColor: pal.textSec.withValues(alpha: 0.5),
