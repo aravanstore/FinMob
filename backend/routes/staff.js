@@ -5,6 +5,8 @@ const { getPaymentInfo } = require('../utils/paymentInfo');
 const { encryptData, getBlindIndex } = require('../utils/crypto');
 const { decryptData } = require('../utils/crypto');
 
+const getPool = (req) => getTenantPool(req.client.dbName);
+
 // Middleware: только для сотрудников
 function staffOnly(req, res, next) {
   if (req.client?.role !== 'staff') {
@@ -13,7 +15,6 @@ function staffOnly(req, res, next) {
   next();
 }
 
-const { getPool, getTenantPool } = require('../db/pool');
 const { sendPush } = require('../push_scheduler');
 
 // ─────────────────────────────────────────────────────────────────────────────
